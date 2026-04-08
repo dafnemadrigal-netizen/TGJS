@@ -129,7 +129,7 @@ export default function ChatApp({ user }: { user: User }) {
 
   async function saveProfile() {
     if (!editName.trim()) return
-    await supabase.from('profiles').update({
+    await (supabase.from('profiles') as any).update({
       name: editName.trim(),
       role: editRole.trim(),
       country: editCountry
