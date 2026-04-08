@@ -49,11 +49,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { action, targetId, requesterId } = body
 
-  const { data: requester } = await supabaseAdmin
-    .from('profiles').select('is_admin').eq('id', requesterId).single()
-  if (!requester?.is_admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-  }
+  const { data: requester, error: requesterError } = await supabaseAdmin
+  .from('profiles')
+  .select('is_admin')
+  .eq('id', requesterId)
+  .single() as { data: { is_admin: boolean } | null; error: unknown }
+
+if (requesterError || !requester?.is_admin) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+}
 
   if (action === 'make_admin') {
     await supabaseAdmin.from('profiles').update({ is_admin: true }).eq('id', targetId)
