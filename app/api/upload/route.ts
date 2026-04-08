@@ -62,16 +62,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Save document record ──
-    const { data: doc } = await supabaseAdmin
-      .from('documents')
+    const { data: doc } = await (supabaseAdmin.from('documents') as any)
       .insert({
         user_id: userId,
         filename: file.name,
         filetype: ext,
-        size_bytes: buffer.length,
+        size_bytes: file.size,
         storage_path: storagePath,
         extracted_text: extractedText,
-        is_shared: isShared
+        is_shared: false,
       })
       .select()
       .single()
