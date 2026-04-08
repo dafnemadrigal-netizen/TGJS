@@ -64,6 +64,9 @@ export default function ChatApp({ user }: { user: User }) {
   const [activeCountry, setActiveCountry] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showProfile, setShowProfile] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editRole, setEditRole] = useState('')
+  const [editCountry, setEditCountry] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -74,8 +77,10 @@ export default function ChatApp({ user }: { user: User }) {
         if (data) {
           setProfile(data)
           setActiveCountry(data.country || '')
-          // If profile has no name, show the modal right away
-          if (!data.name) setShowProfile(true)
+          if (!data.name) {
+            setEditName(''); setEditRole(''); setEditCountry('')
+            setShowProfile(true)
+          }
         }
       })
     loadConversations()
@@ -119,14 +124,22 @@ export default function ChatApp({ user }: { user: User }) {
   }
 
   async function saveProfile() {
-    const name = (document.getElementById('profile-name') as HTMLInputElement)?.value.trim()
-    const role = (document.getElementById('profile-role') as HTMLInputElement)?.value.trim()
-    const country = (document.getElementById('profile-country') as HTMLSelectElement)?.value
-    if (!name) return
-    await supabase.from('profiles').update({ name, role, country }).eq('id', user.id)
-    setProfile(p => p ? { ...p, name, role, country } : p)
-    setActiveCountry(country)
+    if (!editName.trim()) return
+    await supabase.from('profiles').update({
+      name: editName.trim(),
+      role: editRole.trim(),
+      country: editCountry
+    }).eq('id', user.id)
+    setProfile(p => p ? { ...p, name: editName.trim(), role: editRole.trim(), country: editCountry } : p)
+    setActiveCountry(editCountry)
     setShowProfile(false)
+  }
+
+  function openProfileModal() {
+    setEditName(profile?.name || '')
+    setEditRole(profile?.role || '')
+    setEditCountry(profile?.country || '')
+    setShowProfile(true)
   }
 
   async function handleFileUpload(files: FileList) {
@@ -241,18 +254,32 @@ export default function ChatApp({ user }: { user: User }) {
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
               Esta información personaliza las respuestas del asesor.
             </div>
-            {[
-              { label: 'Nombre completo', id: 'profile-name', placeholder: 'Ej. Dafne Madrigal', defaultValue: profile?.name || '' },
-              { label: 'Puesto', id: 'profile-role', placeholder: 'Ej. Directora de Operaciones', defaultValue: profile?.role || '' },
-            ].map(({ label, id, placeholder, defaultValue }) => (
-              <div key={id} style={{ marginBottom: 14 }}>
-                <label style={s.fieldLabel}>{label}</label>
-                <input id={id} defaultValue={defaultValue} placeholder={placeholder} style={s.fieldInput} />
-              </div>
-            ))}
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.fieldLabel}>Nombre completo</label>
+              <input
+                style={s.fieldInput}
+                placeholder="Ej. Dafne Madrigal"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.fieldLabel}>Puesto</label>
+              <input
+                style={s.fieldInput}
+                placeholder="Ej. Directora de Operaciones"
+                value={editRole}
+                onChange={e => setEditRole(e.target.value)}
+              />
+            </div>
             <div style={{ marginBottom: 24 }}>
               <label style={s.fieldLabel}>País principal</label>
-              <select id="profile-country" defaultValue={profile?.country || ''} style={s.fieldInput}>
+              <select
+                style={s.fieldInput}
+                value={editCountry}
+                onChange={e => setEditCountry(e.target.value)}
+              >
                 <option value="">Selecciona un país</option>
                 <option value="Nicaragua">Nicaragua</option>
                 <option value="Panamá">Panamá</option>
@@ -285,14 +312,14 @@ export default function ChatApp({ user }: { user: User }) {
             <span>{usage.count} / {usage.limit} este mes</span>
           </div>
           {/* Profile chip */}
-          <div style={s.userChip} onClick={() => setShowProfile(true)} title="Editar perfil">
+          <div style={s.userChip} onClick={openProfileModal} title="Editar perfil">
             <div style={s.userAvatar}>{initials}</div>
             <div>
               <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.2 }}>
-                {profile?.name || 'Mi perfil'}
+                {profile?.name ? `${profile.name.split(' ')[0]} · ${profile.country || 'Sin país'}` : 'Mi perfil'}
               </div>
               <div style={{ fontSize: 10, color: 'var(--muted)' }}>
-                {profile?.country || 'Sin país'} · editar
+                {profile?.role || 'editar perfil'}
               </div>
             </div>
           </div>
