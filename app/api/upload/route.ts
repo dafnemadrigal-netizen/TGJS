@@ -38,10 +38,9 @@ export async function POST(req: NextRequest) {
       }
     } else if (ext === 'pdf') {
       try {
-        // Use dynamic import to avoid build issues
         const pdfParse = (await import('pdf-parse')).default
         const data = await pdfParse(buffer)
-        extractedText = data.text.slice(0, 50000) // limit to 50k chars
+        extractedText = data.text.slice(0, 50000)
       } catch (e) {
         extractedText = `[No se pudo extraer el contenido del PDF: ${file.name}]`
       }

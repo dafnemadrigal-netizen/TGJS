@@ -1,13 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['pdf-parse']
-  },
-  api: {
-    bodyParser: {
-      sizeLimit: '20mb'
-    }
-  }
+  serverExternalPackages: ['pdf-parse'],
 }
 
 module.exports = nextConfig
