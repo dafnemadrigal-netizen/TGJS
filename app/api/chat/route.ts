@@ -55,7 +55,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'make_admin') {
-    await supabaseAdmin.from('profiles').update({ is_admin: true }).eq('id', targetId)
+    await (supabaseAdmin.from('profiles') as any)
+      .update({ is_admin: true })
+      .eq('id', targetId)
+
     return NextResponse.json({ success: true })
   }
 
