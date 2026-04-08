@@ -1,10 +1,37 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Conversation, Message } from '@/lib/supabase'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+
+// Simple markdown renderer - no external deps, no SSR issues
+function SimpleMarkdown({ text }: { text: string }) {
+  const html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^─+$/gm, '<hr/>')
+    .replace(/^═+$/gm, '<hr/>')
+    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/^• (.+)$/gm, '<li>$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br/>')
+  return (
+    <div
+      className="markdown"
+      style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
+      dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
+    />
+  )
+}
 
 type PendingFile = {
   name: string
@@ -350,7 +377,7 @@ export default function ChatApp({ user }: { user: User }) {
                   )}
                   <div className="markdown" style={s.msgText}>
                     {msg.role === 'assistant'
-                      ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      ? <SimpleMarkdown text={msg.content} />
                       : <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
                     }
                   </div>
