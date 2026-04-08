@@ -4,23 +4,34 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-// Browser client (uses anon key + RLS)
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder',
-  { auth: { persistSession: true } }
-)
+// Singleton pattern — prevents "Multiple GoTrueClient instances" warning
+const globalForSupabase = globalThis as unknown as {
+  supabase: ReturnType<typeof createClient> | undefined
+  supabaseAdmin: ReturnType<typeof createClient> | undefined
+}
 
-// Server/admin client (bypasses RLS — only use in API routes)
-export const supabaseAdmin = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseServiceKey || 'placeholder',
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+export const supabase =
+  globalForSupabase.supabase ??
+  createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: true, storageKey: 'ampm-auth' }
+  })
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForSupabase.supabase = supabase
+}
+
+export const supabaseAdmin =
+  globalForSupabase.supabaseAdmin ??
+  createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  })
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForSupabase.supabaseAdmin = supabaseAdmin
+}
 
 export function hasValidConfig() {
-  return !!(supabaseUrl && supabaseAnonKey &&
-    supabaseUrl !== 'https://placeholder.supabase.co')
+  return !!(supabaseUrl && supabaseAnonKey)
 }
 
 export type Profile = {
@@ -56,13 +67,4 @@ export type FileRef = {
   type: string
   size: number
   url?: string
-}
-
-export type KnowledgeItem = {
-  id: string
-  insight: string
-  source: string
-  country: string
-  tags: string[]
-  created_at: string
 }

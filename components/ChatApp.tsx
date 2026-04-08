@@ -63,6 +63,7 @@ export default function ChatApp({ user }: { user: User }) {
   const [usage, setUsage] = useState({ count: 0, limit: 200 })
   const [activeCountry, setActiveCountry] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [quickPromptsOpen, setQuickPromptsOpen] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [editName, setEditName] = useState('')
   const [editRole, setEditRole] = useState('')
@@ -377,10 +378,16 @@ export default function ChatApp({ user }: { user: User }) {
               ))}
             </div>
 
-            {/* Quick prompts */}
+            {/* Quick prompts - collapsible */}
             <div style={s.sideSection}>
-              <div style={s.sideLabel}>Preguntas rápidas</div>
-              {QUICK_PROMPTS.map((p, i) => (
+              <div
+                style={{ ...s.sideLabel, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: quickPromptsOpen ? 10 : 0 }}
+                onClick={() => setQuickPromptsOpen(o => !o)}
+              >
+                <span>Preguntas rápidas</span>
+                <span style={{ fontSize: 14, color: 'var(--muted)', transition: 'transform .2s', display: 'inline-block', transform: quickPromptsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
+              </div>
+              {quickPromptsOpen && QUICK_PROMPTS.map((p, i) => (
                 <button key={i} style={s.quickBtn}
                   onClick={() => { setInput(p); textareaRef.current?.focus() }}>
                   {p}
