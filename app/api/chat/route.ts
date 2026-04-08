@@ -4,7 +4,7 @@ import { buildSystemPrompt } from '@/lib/system-prompt'
 
 const MONTHLY_LIMIT = parseInt(process.env.MONTHLY_QUERY_LIMIT || '200')
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
-const GEMINI_MODEL = 'gemini-2.5-flash-preview-05-20'
+const GEMINI_MODEL = 'gemini-2.0-flash'
 
 // ── Direct Gemini REST call (avoids SDK system_instruction format issues) ──
 async function callGemini(
