@@ -76,10 +76,13 @@ export default function ChatApp({ user }: { user: User }) {
     supabase.from('profiles').select('*').eq('id', user.id).single()
       .then(({ data }) => {
         if (data) {
-          setProfile(data)
-          setActiveCountry(data.country || '')
-          if (!data.name) {
-            setEditName(''); setEditRole(''); setEditCountry('')
+          const profileData = data as any
+          setProfile(profileData)
+          setActiveCountry(profileData.country || '')
+          if (!profileData.name) {
+            setEditName('')
+            setEditRole('')
+            setEditCountry('')
             setShowProfile(true)
           }
         }
