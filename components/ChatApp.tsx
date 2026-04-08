@@ -128,14 +128,29 @@ export default function ChatApp({ user }: { user: User }) {
   }
 
   async function saveProfile() {
-    if (!editName.trim()) return
-    await (supabase.from('profiles') as any).update({
-      name: editName.trim(),
-      role: editRole.trim(),
-      country: editCountry
-    }).eq('id', user.id)
-    setProfile(p => p ? { ...p, name: editName.trim(), role: editRole.trim(), country: editCountry } : p)
-    setActiveCountry(editCountry)
+    if (!editName.trim()) {
+      alert('El nombre es obligatorio')
+      return
+    }
+
+    const { data, error } = await (supabase.from('profiles') as any)
+      .update({
+        name: editName.trim(),
+        role: editRole.trim(),
+        country: editCountry
+      })
+      .eq('id', user.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error saving profile:', error)
+      alert('No se pudo guardar el perfil: ' + error.message)
+      return
+    }
+
+    setProfile(data)
+    setActiveCountry(data?.country || '')
     setShowProfile(false)
   }
 
