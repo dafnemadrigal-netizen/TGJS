@@ -9,8 +9,8 @@ export async function GET(req: NextRequest) {
   // Verify admin
   if (userId) {
     const { data: profile } = await supabaseAdmin
-  .from('profiles').select('is_admin').eq('id', userId).single()
-if (!(profile as { is_admin?: boolean } | null)?.is_admin) {
+      .from('profiles').select('is_admin').eq('id', userId).single()
+    if (!(profile as { is_admin?: boolean } | null)?.is_admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
   }
@@ -50,17 +50,21 @@ export async function POST(req: NextRequest) {
   const { action, targetId, requesterId } = body
 
   const { data: requester, error: requesterError } = await supabaseAdmin
-  .from('profiles')
-  .select('is_admin')
-  .eq('id', requesterId)
-  .single() as { data: { is_admin: boolean } | null; error: unknown }
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', requesterId)
+    .single() as { data: { is_admin: boolean } | null; error: unknown }
 
-if (requesterError || !requester?.is_admin) {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-}
+  if (requesterError || !requester?.is_admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
 
   if (action === 'make_admin') {
-    await supabaseAdmin.from('profiles').update({ is_admin: true }).eq('id', targetId)
+    await supabaseAdmin
+      .from('profiles')
+      .update({ is_admin: true } as { is_admin: boolean })
+      .eq('id', targetId)
+
     return NextResponse.json({ success: true })
   }
 
