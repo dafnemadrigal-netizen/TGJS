@@ -1,5 +1,5 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
-const GEMINI_MODEL = 'gemini-2.5-flash-preview-05-20'
+const GEMINI_MODEL = 'gemini-2.5-flash''
 
 export async function callGeminiRest(prompt: string, maxTokens = 300): Promise<string> {
   const body = {
