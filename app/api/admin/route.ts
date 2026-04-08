@@ -9,8 +9,8 @@ export async function GET(req: NextRequest) {
   // Verify admin
   if (userId) {
     const { data: profile } = await supabaseAdmin
-      .from('profiles').select('is_admin').eq('id', userId).single()
-    if (!profile?.is_admin) {
+  .from('profiles').select('is_admin').eq('id', userId).single()
+if (!(profile as { is_admin?: boolean } | null)?.is_admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
   }
