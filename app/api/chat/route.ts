@@ -128,22 +128,31 @@ ${message}
 Responde en español, con enfoque estratégico, práctico y útil para AMPM CAM.
 `.trim()
 
-    // Retry up to 3 times for high-demand errors
+    // Retry up to 3 times on overload — returns JSON on all failure paths
     let reply = ''
-    let lastError = ''
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    const delays = [0, 4000, 8000]
+    let lastErrMsg = ''
+    let succeeded = false
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (delays[attempt] > 0) {
+        await new Promise(res => setTimeout(res, delays[attempt]))
+      }
       try {
         reply = await callGeminiRest(fullPrompt, 8000)
+        succeeded = true
         break
       } catch (err: unknown) {
-        lastError = err instanceof Error ? err.message : 'Unknown error'
-        const isOverloaded = lastError.includes('high demand') || lastError.includes('overloaded') || lastError.includes('503') || lastError.includes('429')
-        if (isOverloaded && attempt < 3) {
-          await new Promise(res => setTimeout(res, attempt * 3000))
-          continue
-        }
-        throw err
+        lastErrMsg = err instanceof Error ? err.message : String(err)
+        const isOverloaded = lastErrMsg.includes('high demand') ||
+          lastErrMsg.includes('overloaded') ||
+          lastErrMsg.includes('503') ||
+          lastErrMsg.includes('429') ||
+          lastErrMsg.includes('UNAVAILABLE')
+        if (!isOverloaded) break
       }
+    }
+    if (!succeeded) {
+      return NextResponse.json({ error: lastErrMsg || 'Gemini no disponible. Intenta en unos segundos.' }, { status: 503 })
     }
 
     // 9. Save messages to DB

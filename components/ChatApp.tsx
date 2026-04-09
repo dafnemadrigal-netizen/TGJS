@@ -4,121 +4,31 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Conversation, Message } from '@/lib/supabase'
 
-// Markdown renderer with table and visual element support
+// Simple markdown renderer - no external deps
 function SimpleMarkdown({ text }: { text: string }) {
-    function esc(s: string) {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    }
-    function inline(s: string) {
-        return esc(s)
-            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/`(.+?)`/g, '<code style="background:var(--blue-bg,#eff6ff);border:1px solid var(--blue-border,#bfdbfe);border-radius:4px;padding:1px 5px;font-size:12px;color:var(--blue,#2563eb)">$1</code>')
-    }
-
-    const lines = text.split('\n')
-    const out: string[] = []
-    let i = 0
-
-    while (i < lines.length) {
-        const line = lines[i]
-        const t = line.trim()
-
-        // empty
-        if (!t) { out.push('<div style="height:8px"></div>'); i++; continue }
-
-        // horizontal rule
-        if (/^[-─═━]{3,}$/.test(t)) {
-            out.push('<hr style="border:none;border-top:1px solid var(--border,#e2e8f0);margin:14px 0">')
-            i++; continue
-        }
-
-        // headings
-        if (t.startsWith('### ')) {
-            out.push(`<h3 style="font-size:11px;font-weight:700;color:var(--text2,#475569);text-transform:uppercase;letter-spacing:0.7px;margin:16px 0 4px">${inline(t.slice(4))}</h3>`)
-            i++; continue
-        }
-        if (t.startsWith('## ')) {
-            out.push(`<h2 style="font-size:15px;font-weight:700;color:var(--blue,#2563eb);margin:18px 0 7px">${inline(t.slice(3))}</h2>`)
-            i++; continue
-        }
-        if (t.startsWith('# ')) {
-            out.push(`<h1 style="font-size:17px;font-weight:700;color:var(--accent,#ea6c00);margin:20px 0 9px">${inline(t.slice(2))}</h1>`)
-            i++; continue
-        }
-
-        // progress bars ▓▓▓░░░
-        if (/[▓░█▒]/.test(t)) {
-            out.push(`<div style="font-family:monospace;font-size:13px;color:var(--accent,#ea6c00);background:var(--accent-bg,#fff7ed);border:1px solid var(--accent-border,#fed7aa);border-radius:6px;padding:6px 12px;margin:4px 0">${esc(t)}</div>`)
-            i++; continue
-        }
-
-        // box/scorecard lines ┌ │ └
-        if (/^[┌│└├]/.test(t)) {
-            const box: string[] = []
-            while (i < lines.length && /^[┌│└├─]/.test(lines[i].trim())) {
-                box.push(esc(lines[i])); i++
-            }
-            out.push(`<div style="background:var(--accent-bg,#fff7ed);border:1px solid var(--accent-border,#fed7aa);border-radius:8px;padding:12px 16px;margin:10px 0;font-family:monospace;font-size:13px;line-height:1.9">${box.join('<br>')}</div>`)
-            continue
-        }
-
-        // tables — collect all rows
-        if (t.startsWith('|') && t.endsWith('|')) {
-            const rows: string[] = []
-            while (i < lines.length && lines[i].trim().startsWith('|')) {
-                rows.push(lines[i].trim()); i++
-            }
-            const dataRows = rows.filter(r => !/^\|[\s|:-]+\|$/.test(r))
-            let tableHtml = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:13px">'
-            dataRows.forEach((row, ri) => {
-                const cells = row.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
-                tableHtml += '<tr>'
-                cells.forEach(cell => {
-                    if (ri === 0) {
-                        tableHtml += `<th style="padding:8px 12px;border:1px solid var(--border,#e2e8f0);background:var(--blue-bg,#eff6ff);color:var(--blue,#2563eb);font-weight:600;font-size:12px;text-align:left">${inline(cell)}</th>`
-                    } else {
-                        tableHtml += `<td style="padding:7px 12px;border:1px solid var(--border,#e2e8f0);color:var(--text2,#475569)">${inline(cell)}</td>`
-                    }
-                })
-                tableHtml += '</tr>'
-            })
-            tableHtml += '</table>'
-            out.push(tableHtml)
-            continue
-        }
-
-        // lists
-        if (/^[\*\-•] /.test(t) || /^[➜→▸] /.test(t)) {
-            const items: string[] = []
-            while (i < lines.length && (/^[\*\-•➜→▸] /.test(lines[i].trim()))) {
-                items.push(lines[i].trim().replace(/^[\*\-•➜→▸] /, '')); i++
-            }
-            out.push('<ul style="padding-left:6px;margin:8px 0;list-style:none">' +
-                items.map(item => `<li style="margin-bottom:5px;line-height:1.65;display:flex;gap:8px"><span style="color:var(--accent,#ea6c00);flex-shrink:0">•</span><span>${inline(item)}</span></li>`).join('') +
-                '</ul>')
-            continue
-        }
-        if (/^\d+\. /.test(t)) {
-            const items: string[] = []
-            while (i < lines.length && /^\d+\. /.test(lines[i].trim())) {
-                items.push(lines[i].trim().replace(/^\d+\. /, '')); i++
-            }
-            out.push('<ol style="padding-left:20px;margin:8px 0">' +
-                items.map(item => `<li style="margin-bottom:5px;line-height:1.65">${inline(item)}</li>`).join('') +
-                '</ol>')
-            continue
-        }
-
-        // regular paragraph
-        out.push(`<p style="margin:5px 0;line-height:1.75">${inline(line)}</p>`)
-        i++
-    }
-
+    const html = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/^─+$/gm, '<hr/>').replace(/^═+$/gm, '<hr/>')
+        .replace(/^\* (.+)$/gm, '<li>$1</li>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/^• (.+)$/gm, '<li>$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br/>')
     return (
-        <div className="markdown" style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
-            dangerouslySetInnerHTML={{ __html: out.join('') }} />
+        <div
+            className="markdown"
+            style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
+            dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
+        />
     )
 }
 
@@ -223,24 +133,11 @@ export default function ChatApp({ user }: { user: User }) {
             return
         }
 
-        const { data, error } = await (supabase.from('profiles') as any)
-            .update({
-                name: editName.trim(),
-                role: editRole.trim(),
-                country: editCountry
-            })
-            .eq('id', user.id)
-            .select()
-            .single()
-
-        if (error) {
-            console.error('Error saving profile:', error)
-            alert('No se pudo guardar el perfil: ' + error.message)
-            return
-        }
-
-        setProfile(data)
-        setActiveCountry(data?.country || '')
+        const updates = { id: user.id, name: editName.trim(), role: editRole.trim(), country: editCountry, last_seen_at: new Date().toISOString() }
+        const { error } = await (supabase.from('profiles') as any).upsert(updates, { onConflict: 'id' })
+        if (error) { alert('No se pudo guardar: ' + error.message); return }
+        setProfile(p => ({ ...(p || { id: user.id, is_admin: false, created_at: new Date().toISOString() }), ...updates } as Profile))
+        setActiveCountry(editCountry)
         setShowProfile(false)
     }
 
@@ -313,7 +210,12 @@ export default function ChatApp({ user }: { user: User }) {
                 })
             })
 
-            const data = await res.json()
+            let data: { error?: string; message?: string; reply?: string; conversationId?: string; usageCount?: number; usageLimit?: number }
+            try {
+                data = await res.json()
+            } catch {
+                throw new Error('El servidor no está disponible. Intenta de nuevo en unos segundos.')
+            }
 
             if (data.error === 'LIMIT_REACHED') {
                 setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
