@@ -4,31 +4,121 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Conversation, Message } from '@/lib/supabase'
 
-// Simple markdown renderer - no external deps
+// Markdown renderer with table and visual element support
 function SimpleMarkdown({ text }: { text: string }) {
-    const html = text
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`(.+?)`/g, '<code>$1</code>')
-        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-        .replace(/^─+$/gm, '<hr/>').replace(/^═+$/gm, '<hr/>')
-        .replace(/^\* (.+)$/gm, '<li>$1</li>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/^• (.+)$/gm, '<li>$1</li>')
-        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-        .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/\n/g, '<br/>')
+    function esc(s: string) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    }
+    function inline(s: string) {
+        return esc(s)
+            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/`(.+?)`/g, '<code style="background:var(--blue-bg,#eff6ff);border:1px solid var(--blue-border,#bfdbfe);border-radius:4px;padding:1px 5px;font-size:12px;color:var(--blue,#2563eb)">$1</code>')
+    }
+
+    const lines = text.split('\n')
+    const out: string[] = []
+    let i = 0
+
+    while (i < lines.length) {
+        const line = lines[i]
+        const t = line.trim()
+
+        // empty
+        if (!t) { out.push('<div style="height:8px"></div>'); i++; continue }
+
+        // horizontal rule
+        if (/^[-─═━]{3,}$/.test(t)) {
+            out.push('<hr style="border:none;border-top:1px solid var(--border,#e2e8f0);margin:14px 0">')
+            i++; continue
+        }
+
+        // headings
+        if (t.startsWith('### ')) {
+            out.push(`<h3 style="font-size:11px;font-weight:700;color:var(--text2,#475569);text-transform:uppercase;letter-spacing:0.7px;margin:16px 0 4px">${inline(t.slice(4))}</h3>`)
+            i++; continue
+        }
+        if (t.startsWith('## ')) {
+            out.push(`<h2 style="font-size:15px;font-weight:700;color:var(--blue,#2563eb);margin:18px 0 7px">${inline(t.slice(3))}</h2>`)
+            i++; continue
+        }
+        if (t.startsWith('# ')) {
+            out.push(`<h1 style="font-size:17px;font-weight:700;color:var(--accent,#ea6c00);margin:20px 0 9px">${inline(t.slice(2))}</h1>`)
+            i++; continue
+        }
+
+        // progress bars ▓▓▓░░░
+        if (/[▓░█▒]/.test(t)) {
+            out.push(`<div style="font-family:monospace;font-size:13px;color:var(--accent,#ea6c00);background:var(--accent-bg,#fff7ed);border:1px solid var(--accent-border,#fed7aa);border-radius:6px;padding:6px 12px;margin:4px 0">${esc(t)}</div>`)
+            i++; continue
+        }
+
+        // box/scorecard lines ┌ │ └
+        if (/^[┌│└├]/.test(t)) {
+            const box: string[] = []
+            while (i < lines.length && /^[┌│└├─]/.test(lines[i].trim())) {
+                box.push(esc(lines[i])); i++
+            }
+            out.push(`<div style="background:var(--accent-bg,#fff7ed);border:1px solid var(--accent-border,#fed7aa);border-radius:8px;padding:12px 16px;margin:10px 0;font-family:monospace;font-size:13px;line-height:1.9">${box.join('<br>')}</div>`)
+            continue
+        }
+
+        // tables — collect all rows
+        if (t.startsWith('|') && t.endsWith('|')) {
+            const rows: string[] = []
+            while (i < lines.length && lines[i].trim().startsWith('|')) {
+                rows.push(lines[i].trim()); i++
+            }
+            const dataRows = rows.filter(r => !/^\|[\s|:-]+\|$/.test(r))
+            let tableHtml = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:13px">'
+            dataRows.forEach((row, ri) => {
+                const cells = row.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
+                tableHtml += '<tr>'
+                cells.forEach(cell => {
+                    if (ri === 0) {
+                        tableHtml += `<th style="padding:8px 12px;border:1px solid var(--border,#e2e8f0);background:var(--blue-bg,#eff6ff);color:var(--blue,#2563eb);font-weight:600;font-size:12px;text-align:left">${inline(cell)}</th>`
+                    } else {
+                        tableHtml += `<td style="padding:7px 12px;border:1px solid var(--border,#e2e8f0);color:var(--text2,#475569)">${inline(cell)}</td>`
+                    }
+                })
+                tableHtml += '</tr>'
+            })
+            tableHtml += '</table>'
+            out.push(tableHtml)
+            continue
+        }
+
+        // lists
+        if (/^[\*\-•] /.test(t) || /^[➜→▸] /.test(t)) {
+            const items: string[] = []
+            while (i < lines.length && (/^[\*\-•➜→▸] /.test(lines[i].trim()))) {
+                items.push(lines[i].trim().replace(/^[\*\-•➜→▸] /, '')); i++
+            }
+            out.push('<ul style="padding-left:6px;margin:8px 0;list-style:none">' +
+                items.map(item => `<li style="margin-bottom:5px;line-height:1.65;display:flex;gap:8px"><span style="color:var(--accent,#ea6c00);flex-shrink:0">•</span><span>${inline(item)}</span></li>`).join('') +
+                '</ul>')
+            continue
+        }
+        if (/^\d+\. /.test(t)) {
+            const items: string[] = []
+            while (i < lines.length && /^\d+\. /.test(lines[i].trim())) {
+                items.push(lines[i].trim().replace(/^\d+\. /, '')); i++
+            }
+            out.push('<ol style="padding-left:20px;margin:8px 0">' +
+                items.map(item => `<li style="margin-bottom:5px;line-height:1.65">${inline(item)}</li>`).join('') +
+                '</ol>')
+            continue
+        }
+
+        // regular paragraph
+        out.push(`<p style="margin:5px 0;line-height:1.75">${inline(line)}</p>`)
+        i++
+    }
+
     return (
-        <div
-            className="markdown"
-            style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
-            dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
-        />
+        <div className="markdown" style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
+            dangerouslySetInnerHTML={{ __html: out.join('') }} />
     )
 }
 
@@ -133,11 +223,24 @@ export default function ChatApp({ user }: { user: User }) {
             return
         }
 
-        const updates = { id: user.id, name: editName.trim(), role: editRole.trim(), country: editCountry, last_seen_at: new Date().toISOString() }
-        const { error } = await (supabase.from('profiles') as any).upsert(updates, { onConflict: 'id' })
-        if (error) { alert('No se pudo guardar: ' + error.message); return }
-        setProfile(p => ({ ...(p || { id: user.id, is_admin: false, created_at: new Date().toISOString() }), ...updates } as Profile))
-        setActiveCountry(editCountry)
+        const { data, error } = await (supabase.from('profiles') as any)
+            .update({
+                name: editName.trim(),
+                role: editRole.trim(),
+                country: editCountry
+            })
+            .eq('id', user.id)
+            .select()
+            .single()
+
+        if (error) {
+            console.error('Error saving profile:', error)
+            alert('No se pudo guardar el perfil: ' + error.message)
+            return
+        }
+
+        setProfile(data)
+        setActiveCountry(data?.country || '')
         setShowProfile(false)
     }
 
@@ -254,7 +357,7 @@ export default function ChatApp({ user }: { user: User }) {
             {showProfile && (
                 <div style={s.modalOverlay}>
                     <div style={s.modalCard}>
-                        <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 20, marginBottom: 6 }}>
+                        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 20, marginBottom: 6 }}>
                             Mi perfil
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
@@ -560,8 +663,7 @@ export default function ChatApp({ user }: { user: User }) {
 
             <style>{`
         @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-7px);opacity:1} }
-        input:focus, textarea:focus, select:focus { border-color: var(--accent) !important; outline: none; box-shadow: 0 0 0 3px rgba(234,108,0,0.1); }
-        button:hover { opacity: 0.87; }
+        input:focus, textarea:focus, select:focus { border-color: var(--accent) !important; outline: none; }
       `}</style>
         </div>
     )
@@ -571,25 +673,25 @@ const s: Record<string, React.CSSProperties> = {
     root: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
 
     // Modal
-    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, backdropFilter: 'blur(4px)' },
-    modalCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 400, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' },
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, backdropFilter: 'blur(4px)' },
+    modalCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 400, maxWidth: '92vw', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' },
     fieldLabel: { display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 6 },
-    fieldInput: { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, outline: 'none' },
-    primaryBtn: { flex: 1, padding: 11, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+    fieldInput: { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontFamily: 'DM Sans, sans-serif', fontSize: 14, outline: 'none' },
+    primaryBtn: { flex: 1, padding: 11, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' },
     secondaryBtn: { padding: '11px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 13 },
 
     // Header
-    header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
+    header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: 12 },
     headerLeft: { display: 'flex', alignItems: 'center', gap: 12 },
     headerRight: { display: 'flex', alignItems: 'center', gap: 10 },
     menuBtn: { background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '4px 8px', borderRadius: 6 },
-    logoBadge: { width: 32, height: 32, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 9, boxShadow: '0 3px 10px rgba(234,108,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 12, color: '#fff', flexShrink: 0 },
-    logoTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1 },
+    logoBadge: { width: 32, height: 32, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 12, color: '#fff', flexShrink: 0 },
+    logoTitle: { fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1 },
     logoSub: { fontSize: 11, color: 'var(--muted)' },
-    usageBadge: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 500, border: '1px solid var(--blue-border)', background: 'var(--blue-bg)', color: 'var(--blue)' },
-    userChip: { display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 10, padding: '5px 12px', cursor: 'pointer' },
-    userAvatar: { width: 26, height: 26, borderRadius: 7, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 10, color: '#fff', flexShrink: 0 },
-    logoutBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontFamily: 'Inter, sans-serif' },
+    usageBadge: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 500, border: '1px solid', background: 'var(--surface2)' },
+    userChip: { display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '6px 12px', cursor: 'pointer' },
+    userAvatar: { width: 26, height: 26, borderRadius: 7, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 10, color: '#fff', flexShrink: 0 },
+    logoutBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontFamily: 'DM Sans, sans-serif' },
 
     // Layout
     main: { display: 'flex', flex: 1, overflow: 'hidden' },
@@ -599,11 +701,11 @@ const s: Record<string, React.CSSProperties> = {
     sideSection: { padding: '16px 14px 12px', borderBottom: '1px solid var(--border)' },
     sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 10 },
     chip: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, marginBottom: 5 },
-    chipActive: { borderColor: 'var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)' },
-    newChatBtn: { width: '100%', padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+    chipActive: { borderColor: 'var(--accent)', background: 'rgba(255,77,28,.08)', color: 'var(--accent2)' },
+    newChatBtn: { width: '100%', padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 12, cursor: 'pointer' },
     convItem: { padding: '8px 10px', borderRadius: 7, cursor: 'pointer', marginBottom: 4, border: '1px solid transparent' },
-    convItemActive: { background: 'var(--blue-bg)', borderColor: 'var(--blue-border)' },
-    quickBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--muted)', fontFamily: 'Inter, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 5 },
+    convItemActive: { background: 'rgba(255,77,28,.08)', borderColor: 'var(--accent)' },
+    quickBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--muted)', fontFamily: 'DM Sans, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 5 },
 
     // Chat
     chatArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
@@ -611,17 +713,17 @@ const s: Record<string, React.CSSProperties> = {
 
     // Welcome
     welcome: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' as const, padding: 40 },
-    welcomeIcon: { width: 64, height: 64, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 22, boxShadow: '0 0 40px rgba(255,77,28,.2)' },
-    welcomeTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, marginBottom: 10 },
+    welcomeIcon: { width: 64, height: 64, background: 'linear-gradient(135deg, var(--accent), #ff8c5a)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 22, boxShadow: '0 0 40px rgba(255,77,28,.2)' },
+    welcomeTitle: { fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 700, marginBottom: 10 },
     welcomeDesc: { fontSize: 14, color: 'var(--muted)', lineHeight: 1.7, maxWidth: 480, marginBottom: 28 },
     chipRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, justifyContent: 'center' as const, maxWidth: 560 },
-    welcomeChip: { background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 20, padding: '7px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
+    welcomeChip: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 20, padding: '7px 16px', fontSize: 12, color: 'var(--muted)', cursor: 'pointer' },
 
     // Messages
-    messageRow: { display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' },
-    avatar: { width: 32, height: 32, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: 2 },
-    avatarAI: { background: 'linear-gradient(135deg, #ea6c00, #f97316)', color: '#fff' },
-    avatarUser: { background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', color: 'var(--blue)' },
+    messageRow: { display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid rgba(255,255,255,.04)' },
+    avatar: { width: 32, height: 32, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'Syne, sans-serif', marginTop: 2 },
+    avatarAI: { background: 'linear-gradient(135deg, var(--accent), #ff8c5a)', color: '#fff' },
+    avatarUser: { background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--muted)' },
     msgContent: { flex: 1, minWidth: 0 },
     msgRole: { fontSize: 11, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 7 },
     msgText: { fontSize: 14, lineHeight: 1.75, color: 'var(--text)' },
@@ -629,11 +731,11 @@ const s: Record<string, React.CSSProperties> = {
 
     // Input
     inputArea: { padding: '14px 36px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 },
-    limitBanner: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)', marginBottom: 10, textAlign: 'center' as const },
+    limitBanner: { background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)', marginBottom: 10, textAlign: 'center' as const },
     filePrev: { display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 9px', fontSize: 12, maxWidth: 200 },
-    inputWrapper: { display: 'flex', alignItems: 'flex-end', gap: 9, background: 'var(--surface2)', border: '1.5px solid var(--border2)', borderRadius: 12, padding: '10px 12px' },
+    inputWrapper: { display: 'flex', alignItems: 'flex-end', gap: 9, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: '11px 13px' },
     attachBtn: { width: 34, height: 34, background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 },
-    textarea: { flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, resize: 'none' as const, outline: 'none', minHeight: 22, maxHeight: 150 },
-    sendBtn: { width: 34, height: 34, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, boxShadow: '0 2px 8px rgba(234,108,0,0.25)' },
+    textarea: { flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'DM Sans, sans-serif', fontSize: 14, lineHeight: 1.5, resize: 'none' as const, outline: 'none', minHeight: 22, maxHeight: 150 },
+    sendBtn: { width: 34, height: 34, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 },
     inputHint: { fontSize: 11, color: 'var(--muted)', marginTop: 7, textAlign: 'center' as const },
 }
