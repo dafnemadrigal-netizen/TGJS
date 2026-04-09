@@ -4,139 +4,38 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Conversation, Message } from '@/lib/supabase'
 
-// Rich markdown renderer with tables, scorecards, visual elements
+// Markdown renderer
 function SimpleMarkdown({ text }: { text: string }) {
-    const lines = text.split('\n')
-    const elements: React.ReactNode[] = []
-    let i = 0
-    let keyCounter = 0
-    const k = () => keyCounter++
+    const html = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code style="background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:4px;padding:1px 6px;font-size:12px;color:var(--blue)">$1</code>')
+        .replace(/^### (.+)$/gm, '<h3 style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.7px;margin:16px 0 5px;font-family:Plus Jakarta Sans,sans-serif">$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2 style="font-size:15px;font-weight:700;color:var(--blue);margin:18px 0 8px;font-family:Plus Jakarta Sans,sans-serif">$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1 style="font-size:17px;font-weight:700;color:var(--accent);margin:20px 0 10px;font-family:Plus Jakarta Sans,sans-serif">$1</h1>')
+        .replace(/^─{3,}$/gm, '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">')
+        .replace(/^═{3,}$/gm, '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">')
+        .replace(/^━{3,}$/gm, '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">')
+        .replace(/[▓]+[░]* .+$/gm, (m: string) => `<div style="font-family:monospace;font-size:13px;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:6px;padding:6px 12px;margin:4px 0">${m}</div>`)
+        .replace(/^[┌│└├].+$/gm, (m: string) => `<span style="font-family:monospace;display:block;font-size:12.5px">${m}</span>`)
+        .replace(/^[\*\-•] (.+)$/gm, '<li style="margin-bottom:5px;line-height:1.65;list-style:none;padding-left:4px">• $1</li>')
+        .replace(/^\d+\. (.+)$/gm, '<li style="margin-bottom:5px;line-height:1.65">$1</li>')
+        .replace(/(<li[^>]*>.*<\/li>\n?)+/g, (m: string) => `<ul style="padding-left:4px;margin:8px 0">${m}</ul>`)
+        .replace(/^\|(.+)\|$/gm, (row: string) => {
+            if (/^\|[-| :]+\|$/.test(row)) return ''
+            const cells = row.split('|').slice(1, -1).map((c: string) => c.trim())
+            return '<tr>' + cells.map((c: string) => `<td style="padding:7px 12px;border:1px solid var(--border);color:var(--text2);font-size:13px">${c}</td>`).join('') + '</tr>'
+        })
+        .replace(/(<tr>.*<\/tr>\n?)+/g, (m: string) => `<table style="width:100%;border-collapse:collapse;margin:10px 0;border-radius:8px;overflow:hidden">${m}</table>`)
+        .replace(/\n\n/g, '</p><p style="margin:6px 0;line-height:1.75">')
+        .replace(/\n/g, '<br>')
 
-    function fmt(t: string): string {
-        return t
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/`(.+?)`/g, '<code style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:12px">$1</code>')
-    }
-
-    while (i < lines.length) {
-        const line = lines[i]
-
-        if (!line.trim()) { i++; continue }
-
-        // Horizontal rules
-        if (/^[─═━\-]{3,}$/.test(line.trim())) {
-            elements.push(<hr key={k()} style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '14px 0' }} />)
-            i++; continue
-        }
-
-        // Box/scorecard lines: ┌ │ └
-        if (/^[┌│└├]/.test(line)) {
-            const boxLines: string[] = []
-            while (i < lines.length && /^[┌│└├─]/.test(lines[i])) {
-                boxLines.push(lines[i]); i++
-            }
-            elements.push(
-                <div key={k()} style={{
-                    background: 'rgba(255,77,28,0.05)', border: '1px solid rgba(255,77,28,0.25)',
-                    borderRadius: 8, padding: '12px 16px', margin: '12px 0',
-                    fontFamily: 'monospace', fontSize: 13, lineHeight: 1.9, color: 'var(--text)'
-                }}>
-                    {boxLines.map((bl, bi) => (
-                        <div key={bi} dangerouslySetInnerHTML={{ __html: fmt(bl) }} />
-                    ))}
-                </div>
-            )
-            continue
-        }
-
-        // Tables
-        if (/^\|.+\|/.test(line)) {
-            const tableLines: string[] = []
-            while (i < lines.length && /^\|/.test(lines[i])) {
-                tableLines.push(lines[i]); i++
-            }
-            const rows = tableLines.filter(l => !/^\|[\-| :]+\|$/.test(l.trim()))
-            elements.push(
-                <div key={k()} style={{ overflowX: 'auto', margin: '12px 0', borderRadius: 8, border: '1px solid var(--border)' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <tbody>
-                            {rows.map((row, ri) => {
-                                const cells = row.split('|').slice(1, -1).map(c => c.trim())
-                                return (
-                                    <tr key={ri}>
-                                        {cells.map((cell, ci) => {
-                                            const isHead = ri === 0
-                                            return isHead
-                                                ? <th key={ci} style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: 'var(--accent2)', background: 'var(--surface2)', fontFamily: 'Syne, sans-serif', fontSize: 12 }} dangerouslySetInnerHTML={{ __html: fmt(cell) }} />
-                                                : <td key={ci} style={{ padding: '7px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)', borderRight: '1px solid var(--border)', color: 'var(--text)', background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }} dangerouslySetInnerHTML={{ __html: fmt(cell) }} />
-                                        })}
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )
-            continue
-        }
-
-        // Headings
-        const h3 = line.match(/^### (.+)/)
-        if (h3) {
-            elements.push(<h3 key={k()} style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent2)', margin: '18px 0 6px', fontFamily: 'Syne, sans-serif', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }} dangerouslySetInnerHTML={{ __html: fmt(h3[1]) }} />)
-            i++; continue
-        }
-        const h2 = line.match(/^## (.+)/)
-        if (h2) {
-            elements.push(<h2 key={k()} style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent2)', margin: '20px 0 8px', fontFamily: 'Syne, sans-serif' }} dangerouslySetInnerHTML={{ __html: fmt(h2[1]) }} />)
-            i++; continue
-        }
-        const h1 = line.match(/^# (.+)/)
-        if (h1) {
-            elements.push(<h1 key={k()} style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)', margin: '22px 0 10px', fontFamily: 'Syne, sans-serif' }} dangerouslySetInnerHTML={{ __html: fmt(h1[1]) }} />)
-            i++; continue
-        }
-
-        // Progress bars
-        if (/[▓░]/.test(line)) {
-            elements.push(
-                <div key={k()} style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--accent2)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 12px', margin: '4px 0' }}
-                    dangerouslySetInnerHTML={{ __html: fmt(line) }} />
-            )
-            i++; continue
-        }
-
-        // Lists
-        if (/^[\*\-•➜→] /.test(line) || /^\d+\. /.test(line)) {
-            const items: string[] = []
-            const ordered = /^\d+\./.test(line)
-            while (i < lines.length && (/^[\*\-•➜→] /.test(lines[i]) || /^\d+\. /.test(lines[i]))) {
-                items.push(lines[i].replace(/^[\*\-•➜→] /, '').replace(/^\d+\. /, ''))
-                i++
-            }
-            elements.push(ordered
-                ? <ol key={k()} style={{ paddingLeft: 22, margin: '8px 0' }}>
-                    {items.map((item, li) => <li key={li} style={{ marginBottom: 5, fontSize: 14, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: fmt(item) }} />)}
-                </ol>
-                : <ul key={k()} style={{ paddingLeft: 22, margin: '8px 0', listStyleType: 'none' }}>
-                    {items.map((item, li) => <li key={li} style={{ marginBottom: 5, fontSize: 14, lineHeight: 1.65, paddingLeft: 4 }} dangerouslySetInnerHTML={{ __html: '• ' + fmt(item) }} />)}
-                </ul>
-            )
-            continue
-        }
-
-        // Regular line
-        elements.push(
-            <p key={k()} style={{ margin: '5px 0', fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
-                dangerouslySetInnerHTML={{ __html: fmt(line) }} />
-        )
-        i++
-    }
-
-    return <div className="markdown" style={{ fontSize: 14, lineHeight: 1.75 }}>{elements}</div>
+    return (
+        <div className="markdown" style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
+            dangerouslySetInnerHTML={{ __html: `<p style="margin:6px 0;line-height:1.75">${html}</p>` }} />
+    )
 }
 
 
@@ -762,4 +661,4 @@ const s: Record<string, React.CSSProperties> = {
   sendBtn: { width: 34, height: 34, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, boxShadow: '0 2px 8px rgba(234,108,0,0.25)' },
   inputHint: { fontSize: 11, color: 'var(--muted)', marginTop: 7, textAlign: 'center' as const },
 }
-
+// end
