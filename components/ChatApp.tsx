@@ -133,15 +133,16 @@ export default function ChatApp({ user }: { user: User }) {
       return
     }
 
-    const { data, error } = await (supabase.from('profiles') as any)
-      .update({
-        name: editName.trim(),
-        role: editRole.trim(),
-        country: editCountry
-      })
-      .eq('id', user.id)
-      .select()
-      .single()
+    const updates = {
+      id: user.id,
+      name: editName.trim(),
+      role: editRole.trim(),
+      country: editCountry,
+      last_seen_at: new Date().toISOString()
+    }
+
+    const { error } = await (supabase.from('profiles') as any)
+      .upsert(updates, { onConflict: 'id' })
 
     if (error) {
       console.error('Error saving profile:', error)
@@ -149,8 +150,12 @@ export default function ChatApp({ user }: { user: User }) {
       return
     }
 
-    setProfile(data)
-    setActiveCountry(data?.country || '')
+    // Update local state directly — don't re-query (avoids RLS issues)
+    setProfile(p => ({
+      ...(p || { id: user.id, is_admin: false, created_at: new Date().toISOString() }),
+      ...updates
+    } as Profile))
+    setActiveCountry(editCountry)
     setShowProfile(false)
   }
 
