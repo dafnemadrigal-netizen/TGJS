@@ -23,20 +23,45 @@ export default function AuthScreen() {
 
     if (mode === 'register') {
       if (!name.trim()) { setError('El nombre es requerido'); setLoading(false); return }
-      const { error: signUpError } = await supabase.auth.signUp({
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email, password,
         options: {
           data: { name, role, country },
           emailRedirectTo: window.location.origin
         }
       })
+
       if (signUpError) { setError(signUpError.message); setLoading(false); return }
-      setMessage('¡Cuenta creada! Revisa tu email para confirmar y luego inicia sesión.')
+
+      // Insertar perfil manualmente — no dependemos del trigger
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            name: name.trim(),
+            role: role.trim() || null,
+            country: country || null,
+            is_admin: false,
+          })
+
+        if (profileError) {
+          // Si falla por duplicate key, el trigger ya lo creó — no es un error real
+          if (!profileError.message.includes('duplicate') && !profileError.code?.includes('23505')) {
+            console.error('Profile insert error:', profileError)
+          }
+        }
+      }
+
+      setMessage('¡Cuenta creada! Ahora puedes iniciar sesión.')
       setMode('login')
+
     } else {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
       if (signInError) { setError('Email o contraseña incorrectos'); setLoading(false); return }
     }
+
     setLoading(false)
   }
 
