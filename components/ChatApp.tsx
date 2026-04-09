@@ -133,11 +133,24 @@ export default function ChatApp({ user }: { user: User }) {
             return
         }
 
-        const updates = { id: user.id, name: editName.trim(), role: editRole.trim(), country: editCountry, last_seen_at: new Date().toISOString() }
-        const { error } = await (supabase.from('profiles') as any).upsert(updates, { onConflict: 'id' })
-        if (error) { alert('No se pudo guardar: ' + error.message); return }
-        setProfile(p => ({ ...(p || { id: user.id, is_admin: false, created_at: new Date().toISOString() }), ...updates } as Profile))
-        setActiveCountry(editCountry)
+        const { data, error } = await (supabase.from('profiles') as any)
+            .update({
+                name: editName.trim(),
+                role: editRole.trim(),
+                country: editCountry
+            })
+            .eq('id', user.id)
+            .select()
+            .single()
+
+        if (error) {
+            console.error('Error saving profile:', error)
+            alert('No se pudo guardar el perfil: ' + error.message)
+            return
+        }
+
+        setProfile(data)
+        setActiveCountry(data?.country || '')
         setShowProfile(false)
     }
 
@@ -210,12 +223,7 @@ export default function ChatApp({ user }: { user: User }) {
                 })
             })
 
-            let data: { error?: string; message?: string; reply?: string; conversationId?: string; usageCount?: number; usageLimit?: number }
-            try {
-                data = await res.json()
-            } catch {
-                throw new Error('El servidor no está disponible. Intenta de nuevo en unos segundos.')
-            }
+            const data = await res.json()
 
             if (data.error === 'LIMIT_REACHED') {
                 setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
@@ -224,7 +232,7 @@ export default function ChatApp({ user }: { user: User }) {
             if (data.error) throw new Error(data.error)
 
             if (!activeConvId) {
-                setActiveConvId(data.conversationId)
+                setActiveConvId(data.conversationId ?? null)
                 await loadConversations()
             }
             await loadMessages(data.conversationId)
