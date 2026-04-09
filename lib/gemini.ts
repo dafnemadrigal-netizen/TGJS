@@ -1,7 +1,7 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 const GEMINI_MODEL = 'gemini-2.5-flash'
 
-export async function callGeminiRest(prompt: string, maxTokens = 1500): Promise<string> {
+export async function callGeminiRest(prompt: string, maxTokens = 4000): Promise<string> {
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 }
