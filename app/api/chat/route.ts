@@ -97,15 +97,21 @@ export async function POST(req: NextRequest) {
     if (fileData && fileData.length > 0) {
       for (const file of fileData) {
         if (file.type === 'text' && file.content) {
-          fileContext += `\n\n[Archivo adjunto: ${file.name}]\n${file.content}`
+          const truncated = file.content && file.content.length > 8000 ? file.content.slice(0, 8000) + '\n...[truncado]' : file.content
+          fileContext += `\n\n[Archivo adjunto: ${file.name}]\n${truncated}`
         } else if (file.type === 'image') {
           fileContext += `\n\n[Imagen adjunta: ${file.name}]`
         }
       }
     }
 
-    const historyText = (history || [])
-      .map((m: any) => `${m.role === 'assistant' ? 'Asistente' : 'Usuario'}: ${m.content}`)
+    const recentHistory = (history || []).slice(-6)
+    const historyText = recentHistory
+      .map((m: any) => {
+        const role = m.role === 'assistant' ? 'Asistente' : 'Usuario'
+        const content = m.content.length > 800 ? m.content.slice(0, 800) + '...' : m.content
+        return `${role}: ${content}`
+      })
       .join('\n\n')
 
     const fullPrompt = `
@@ -122,7 +128,7 @@ ${message}
 Responde en español, con enfoque estratégico, práctico y útil para AMPM CAM.
 `.trim()
 
-    const reply = await callGeminiRest(fullPrompt, 2200)
+    const reply = await callGeminiRest(fullPrompt, 8000)
 
     // 9. Save messages to DB
     const fileRefs =
