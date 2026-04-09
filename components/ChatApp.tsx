@@ -4,103 +4,33 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Conversation, Message } from '@/lib/supabase'
 
-// Markdown renderer
+// Simple markdown renderer - no external deps
 function SimpleMarkdown({ text }: { text: string }) {
-    function processLine(line: string): string {
-        return line
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/`(.+?)`/g, '<code style="background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:4px;padding:1px 5px;font-size:12px;color:var(--blue)">$1</code>')
-    }
-
-    const lines = text.split('\n')
-    const output: string[] = []
-    let i = 0
-
-    while (i < lines.length) {
-        const raw = lines[i]
-        const line = raw.trim()
-
-        if (!line) { output.push('<br>'); i++; continue }
-
-        if (/^---+$/.test(line) || /^===+$/.test(line) || /^━━━+$/.test(line) || /^───+$/.test(line)) {
-            output.push('<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">')
-            i++; continue
-        }
-
-        if (line.startsWith('### ')) {
-            output.push(`<h3 style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.7px;margin:16px 0 5px;font-family:Plus Jakarta Sans,sans-serif">${processLine(line.slice(4))}</h3>`)
-            i++; continue
-        }
-        if (line.startsWith('## ')) {
-            output.push(`<h2 style="font-size:15px;font-weight:700;color:var(--blue);margin:18px 0 8px;font-family:Plus Jakarta Sans,sans-serif">${processLine(line.slice(3))}</h2>`)
-            i++; continue
-        }
-        if (line.startsWith('# ')) {
-            output.push(`<h1 style="font-size:17px;font-weight:700;color:var(--accent);margin:20px 0 10px;font-family:Plus Jakarta Sans,sans-serif">${processLine(line.slice(2))}</h1>`)
-            i++; continue
-        }
-
-        if (line.startsWith('|') && line.endsWith('|')) {
-            const tableRows: string[] = []
-            let isFirst = true
-            while (i < lines.length && lines[i].trim().startsWith('|')) {
-                const r = lines[i].trim()
-                if (/^\|[-| :]+\|$/.test(r)) { i++; isFirst = false; continue }
-                const cells = r.slice(1, -1).split('|').map(c => c.trim())
-                const tag = isFirst ? 'th' : 'td'
-                const thStyle = 'padding:8px 12px;border:1px solid var(--border);background:var(--blue-bg);color:var(--blue);font-weight:600;font-size:12px;text-align:left'
-                const tdStyle = 'padding:7px 12px;border:1px solid var(--border);color:var(--text2);font-size:13px'
-                const style = isFirst ? thStyle : tdStyle
-                tableRows.push('<tr>' + cells.map(c => `<${tag} style="${style}">${processLine(c)}</${tag}>`).join('') + '</tr>')
-                i++; isFirst = false
-            }
-            if (tableRows.length) {
-                output.push(`<table style="width:100%;border-collapse:collapse;margin:12px 0">${tableRows.join('')}</table>`)
-            }
-            continue
-        }
-
-        if (line.startsWith('\u250c') || line.startsWith('\u2502') || line.startsWith('\u2514') || line.startsWith('\u251c')) {
-            const boxLines: string[] = []
-            while (i < lines.length && (lines[i].startsWith('\u250c') || lines[i].startsWith('\u2502') || lines[i].startsWith('\u2514') || lines[i].startsWith('\u251c'))) {
-                boxLines.push(lines[i]); i++
-            }
-            output.push(`<div style="background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:8px;padding:12px 16px;margin:10px 0;font-family:monospace;font-size:13px;line-height:1.9">${boxLines.map(l => processLine(l)).join('<br>')}</div>`)
-            continue
-        }
-
-        if (line.startsWith('* ') || line.startsWith('- ') || line.startsWith('• ')) {
-            const items: string[] = []
-            while (i < lines.length && (lines[i].trim().startsWith('* ') || lines[i].trim().startsWith('- ') || lines[i].trim().startsWith('• '))) {
-                items.push(lines[i].trim().slice(2)); i++
-            }
-            output.push('<ul style="padding-left:6px;margin:8px 0;list-style:none">' + items.map(item => `<li style="margin-bottom:5px;line-height:1.65;padding-left:2px">• ${processLine(item)}</li>`).join('') + '</ul>')
-            continue
-        }
-
-        if (/^\d+\. /.test(line)) {
-            const items: string[] = []
-            while (i < lines.length && /^\d+\. /.test(lines[i].trim())) {
-                items.push(lines[i].trim().replace(/^\d+\. /, '')); i++
-            }
-            output.push('<ol style="padding-left:20px;margin:8px 0">' + items.map(item => `<li style="margin-bottom:5px;line-height:1.65">${processLine(item)}</li>`).join('') + '</ol>')
-            continue
-        }
-
-        output.push(`<p style="margin:5px 0;line-height:1.75">${processLine(raw)}</p>`)
-        i++
-    }
-
+    const html = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/^─+$/gm, '<hr/>').replace(/^═+$/gm, '<hr/>')
+        .replace(/^\* (.+)$/gm, '<li>$1</li>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/^• (.+)$/gm, '<li>$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br/>')
     return (
-        <div className="markdown" style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
-            dangerouslySetInnerHTML={{ __html: output.join('') }} />
+        <div
+            className="markdown"
+            style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text)' }}
+            dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
+        />
     )
 }
-
 
 type PendingFile = {
     name: string
@@ -203,24 +133,11 @@ export default function ChatApp({ user }: { user: User }) {
             return
         }
 
-        const { data, error } = await (supabase.from('profiles') as any)
-            .update({
-                name: editName.trim(),
-                role: editRole.trim(),
-                country: editCountry
-            })
-            .eq('id', user.id)
-            .select()
-            .single()
-
-        if (error) {
-            console.error('Error saving profile:', error)
-            alert('No se pudo guardar el perfil: ' + error.message)
-            return
-        }
-
-        setProfile(data)
-        setActiveCountry(data?.country || '')
+        const updates = { id: user.id, name: editName.trim(), role: editRole.trim(), country: editCountry, last_seen_at: new Date().toISOString() }
+        const { error } = await (supabase.from('profiles') as any).upsert(updates, { onConflict: 'id' })
+        if (error) { alert('No se pudo guardar: ' + error.message); return }
+        setProfile(p => ({ ...(p || { id: user.id, is_admin: false, created_at: new Date().toISOString() }), ...updates } as Profile))
+        setActiveCountry(editCountry)
         setShowProfile(false)
     }
 
@@ -337,7 +254,7 @@ export default function ChatApp({ user }: { user: User }) {
             {showProfile && (
                 <div style={s.modalOverlay}>
                     <div style={s.modalCard}>
-                        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 20, marginBottom: 6 }}>
+                        <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 20, marginBottom: 6 }}>
                             Mi perfil
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
@@ -644,83 +561,79 @@ export default function ChatApp({ user }: { user: User }) {
             <style>{`
         @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-7px);opacity:1} }
         input:focus, textarea:focus, select:focus { border-color: var(--accent) !important; outline: none; box-shadow: 0 0 0 3px rgba(234,108,0,0.1); }
-        button:hover { opacity: 0.88; }
-        .conv-item:hover { background: var(--surface2) !important; }
-        .welcome-chip:hover { border-color: var(--accent-border) !important; background: var(--accent-bg) !important; color: var(--accent) !important; }
-        .chip:hover { border-color: var(--border2) !important; }
-        .quick-btn:hover { border-color: var(--accent-border) !important; background: var(--accent-bg) !important; color: var(--accent) !important; }
-      \`}</style>
-    </div>
-  )
+        button:hover { opacity: 0.87; }
+      `}</style>
+        </div>
+    )
 }
 
 const s: Record<string, React.CSSProperties> = {
-  root: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg)' },
+    root: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
 
-  // Modal
-  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, backdropFilter: 'blur(4px)' },
-  modalCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 420, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' },
-  fieldLabel: { display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 6 },
-  fieldInput: { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, outline: 'none' },
-  primaryBtn: { flex: 1, padding: 11, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: '0 3px 10px rgba(234,108,0,0.2)' },
-  secondaryBtn: { padding: '11px 16px', background: 'none', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text2)', cursor: 'pointer', fontSize: 13 },
+    // Modal
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, backdropFilter: 'blur(4px)' },
+    modalCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 400, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' },
+    fieldLabel: { display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 6 },
+    fieldInput: { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, outline: 'none' },
+    primaryBtn: { flex: 1, padding: 11, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+    secondaryBtn: { padding: '11px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 13 },
 
-  // Header
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
-  headerLeft: { display: 'flex', alignItems: 'center', gap: 12 },
-  headerRight: { display: 'flex', alignItems: 'center', gap: 10 },
-  menuBtn: { background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '4px 8px', borderRadius: 6 },
-  logoBadge: { width: 34, height: 34, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 13, color: '#fff', flexShrink: 0, boxShadow: '0 3px 10px rgba(234,108,0,0.25)' },
-  logoTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1, color: 'var(--text)' },
-  logoSub: { fontSize: 11, color: 'var(--muted)', marginTop: 2 },
-  usageBadge: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 20, fontSize: 11.5, fontWeight: 500, border: '1px solid var(--blue-border)', background: 'var(--blue-bg)', color: 'var(--blue)' },
-  userChip: { display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 10, padding: '5px 12px', cursor: 'pointer' },
-  userAvatar: { width: 26, height: 26, borderRadius: 7, background: 'linear-gradient(135deg, #ea6c00, #f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 10, color: '#fff', flexShrink: 0 },
-  logoutBtn: { background: 'none', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontFamily: 'Inter, sans-serif' },
+    // Header
+    header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
+    headerLeft: { display: 'flex', alignItems: 'center', gap: 12 },
+    headerRight: { display: 'flex', alignItems: 'center', gap: 10 },
+    menuBtn: { background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '4px 8px', borderRadius: 6 },
+    logoBadge: { width: 32, height: 32, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 9, boxShadow: '0 3px 10px rgba(234,108,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 12, color: '#fff', flexShrink: 0 },
+    logoTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1 },
+    logoSub: { fontSize: 11, color: 'var(--muted)' },
+    usageBadge: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 500, border: '1px solid var(--blue-border)', background: 'var(--blue-bg)', color: 'var(--blue)' },
+    userChip: { display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 10, padding: '5px 12px', cursor: 'pointer' },
+    userAvatar: { width: 26, height: 26, borderRadius: 7, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 10, color: '#fff', flexShrink: 0 },
+    logoutBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontFamily: 'Inter, sans-serif' },
 
-  // Layout
-  main: { display: 'flex', flex: 1, overflow: 'hidden' },
+    // Layout
+    main: { display: 'flex', flex: 1, overflow: 'hidden' },
 
-  // Sidebar
-  sidebar: { width: 256, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' },
-  sideSection: { padding: '14px 13px 12px', borderBottom: '1px solid var(--border)' },
-  sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 9 },
-  chip: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, marginBottom: 4, color: 'var(--text2)' },
-  chipActive: { borderColor: 'var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)' },
-  newChatBtn: { padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 3px 10px rgba(234,108,0,0.2)', width: '100%' },
-  convItem: { padding: '8px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 3, border: '1px solid transparent' },
-  convItemActive: { background: 'var(--blue-bg)', borderColor: 'var(--blue-border)' },
-  quickBtn: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--text2)', fontFamily: 'Inter, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 4 },
+    // Sidebar
+    sidebar: { width: 260, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' },
+    sideSection: { padding: '16px 14px 12px', borderBottom: '1px solid var(--border)' },
+    sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 10 },
+    chip: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, marginBottom: 5 },
+    chipActive: { borderColor: 'var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)' },
+    newChatBtn: { width: '100%', padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+    convItem: { padding: '8px 10px', borderRadius: 7, cursor: 'pointer', marginBottom: 4, border: '1px solid transparent' },
+    convItemActive: { background: 'var(--blue-bg)', borderColor: 'var(--blue-border)' },
+    quickBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--muted)', fontFamily: 'Inter, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 5 },
 
-  // Chat
-  chatArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' },
-  messages: { flex: 1, overflowY: 'auto', padding: '28px 36px', scrollBehavior: 'smooth' as const },
+    // Chat
+    chatArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+    messages: { flex: 1, overflowY: 'auto', padding: '28px 36px', scrollBehavior: 'smooth' as const },
 
-  // Welcome
-  welcome: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' as const, padding: 40 },
-  welcomeIcon: { width: 64, height: 64, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 22, boxShadow: '0 8px 24px rgba(234,108,0,0.2)' },
-  welcomeTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, marginBottom: 10, color: 'var(--text)' },
-  welcomeDesc: { fontSize: 14, color: 'var(--text2)', lineHeight: 1.7, maxWidth: 480, marginBottom: 28 },
-  chipRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, justifyContent: 'center' as const, maxWidth: 560 },
-  welcomeChip: { background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 20, padding: '7px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
+    // Welcome
+    welcome: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' as const, padding: 40 },
+    welcomeIcon: { width: 64, height: 64, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 22, boxShadow: '0 0 40px rgba(255,77,28,.2)' },
+    welcomeTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, marginBottom: 10 },
+    welcomeDesc: { fontSize: 14, color: 'var(--muted)', lineHeight: 1.7, maxWidth: 480, marginBottom: 28 },
+    chipRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, justifyContent: 'center' as const, maxWidth: 560 },
+    welcomeChip: { background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 20, padding: '7px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
 
-  // Messages
-  messageRow: { display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' },
-  avatar: { width: 32, height: 32, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: 2 },
-  avatarAI: { background: 'linear-gradient(135deg, #ea6c00, #f97316)', color: '#fff', boxShadow: '0 2px 8px rgba(234,108,0,0.2)' },
-  avatarUser: { background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', color: 'var(--blue)' },
-  msgContent: { flex: 1, minWidth: 0 },
-  msgRole: { fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 6 },
-  msgText: { fontSize: 14, lineHeight: 1.75, color: 'var(--text)' },
-  fileChip: { display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', fontSize: 12, color: 'var(--text2)' },
+    // Messages
+    messageRow: { display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' },
+    avatar: { width: 32, height: 32, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: 2 },
+    avatarAI: { background: 'linear-gradient(135deg, #ea6c00, #f97316)', color: '#fff' },
+    avatarUser: { background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', color: 'var(--blue)' },
+    msgContent: { flex: 1, minWidth: 0 },
+    msgRole: { fontSize: 11, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 7 },
+    msgText: { fontSize: 14, lineHeight: 1.75, color: 'var(--text)' },
+    fileChip: { display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', fontSize: 12, color: 'var(--muted)' },
 
-  // Input
-  inputArea: { padding: '14px 36px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, boxShadow: '0 -1px 3px rgba(0,0,0,0.04)' },
-  limitBanner: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)', marginBottom: 10, textAlign: 'center' as const },
-  filePrev: { display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 9px', fontSize: 12, maxWidth: 200 },
-  inputWrapper: { display: 'flex', alignItems: 'flex-end', gap: 9, background: 'var(--surface2)', border: '1.5px solid var(--border2)', borderRadius: 12, padding: '10px 12px' },
-  attachBtn: { width: 34, height: 34, background: 'none', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 },
-  textarea: { flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, resize: 'none' as const, outline: 'none', minHeight: 22, maxHeight: 150 },
-  sendBtn: { width: 34, height: 34, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, boxShadow: '0 2px 8px rgba(234,108,0,0.25)' },
-  inputHint: { fontSize: 11, color: 'var(--muted)', marginTop: 7, textAlign: 'center' as const },
+    // Input
+    inputArea: { padding: '14px 36px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 },
+    limitBanner: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)', marginBottom: 10, textAlign: 'center' as const },
+    filePrev: { display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 9px', fontSize: 12, maxWidth: 200 },
+    inputWrapper: { display: 'flex', alignItems: 'flex-end', gap: 9, background: 'var(--surface2)', border: '1.5px solid var(--border2)', borderRadius: 12, padding: '10px 12px' },
+    attachBtn: { width: 34, height: 34, background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 },
+    textarea: { flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, resize: 'none' as const, outline: 'none', minHeight: 22, maxHeight: 150 },
+    sendBtn: { width: 34, height: 34, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, boxShadow: '0 2px 8px rgba(234,108,0,0.25)' },
+    inputHint: { fontSize: 11, color: 'var(--muted)', marginTop: 7, textAlign: 'center' as const },
 }
