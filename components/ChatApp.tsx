@@ -479,7 +479,7 @@ export default function ChatApp({ user }: { user: User }) {
 
             {/* New conversation */}
             <div style={s.sideSection}>
-              <button style={{ ...s.newChatBtn, width: 'calc(100% - 26px)' } as React.CSSProperties} onClick={newConversation}>✦ Nueva consulta</button>
+              <button style={s.newChatBtn} onClick={newConversation}>✦ Nueva consulta</button>
             </div>
 
             {/* Conversation history */}
@@ -725,7 +725,7 @@ const s: Record<string, React.CSSProperties> = {
   sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 9 },
   chip: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, marginBottom: 4, color: 'var(--text2)' },
   chipActive: { borderColor: 'var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)' },
-  newChatBtn: { margin: '11px 13px', padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 3px 10px rgba(234,108,0,0.2)' } as React.CSSProperties,
+  newChatBtn: { padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 3px 10px rgba(234,108,0,0.2)', width: '100%' },
   convItem: { padding: '8px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 3, border: '1px solid transparent' },
   convItemActive: { background: 'var(--blue-bg)', borderColor: 'var(--blue-border)' },
   quickBtn: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--text2)', fontFamily: 'Inter, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 4 },
