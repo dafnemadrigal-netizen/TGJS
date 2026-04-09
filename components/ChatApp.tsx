@@ -241,8 +241,15 @@ export default function ChatApp({ user }: { user: User }) {
       return
     }
 
-    const updates = { id: user.id, name: editName.trim(), role: editRole.trim(), country: editCountry, last_seen_at: new Date().toISOString() }
-    const { error } = await (supabase.from('profiles') as any).upsert(updates, { onConflict: 'id' })
+    const { data, error } = await (supabase.from('profiles') as any)
+      .update({
+        name: editName.trim(),
+        role: editRole.trim(),
+        country: editCountry
+      })
+      .eq('id', user.id)
+      .select()
+      .single()
 
     if (error) {
       console.error('Error saving profile:', error)
@@ -250,8 +257,8 @@ export default function ChatApp({ user }: { user: User }) {
       return
     }
 
-    setProfile(p => ({ ...(p || { id: user.id, is_admin: false, created_at: new Date().toISOString() }), ...updates } as Profile))
-    setActiveCountry(editCountry)
+    setProfile(data)
+    setActiveCountry(data?.country || '')
     setShowProfile(false)
   }
 
@@ -472,7 +479,7 @@ export default function ChatApp({ user }: { user: User }) {
 
             {/* New conversation */}
             <div style={s.sideSection}>
-              <button style={s.newChatBtn} onClick={newConversation}>✦ Nueva consulta</button>
+              <button style={{ ...s.newChatBtn, width: 'calc(100% - 26px)' } as React.CSSProperties} onClick={newConversation}>✦ Nueva consulta</button>
             </div>
 
             {/* Conversation history */}
@@ -674,79 +681,85 @@ export default function ChatApp({ user }: { user: User }) {
 
       <style>{`
         @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-7px);opacity:1} }
-        input:focus, textarea:focus, select:focus { border-color: var(--accent) !important; outline: none; }
-      `}</style>
+        input:focus, textarea:focus, select:focus { border-color: var(--accent) !important; outline: none; box-shadow: 0 0 0 3px rgba(234,108,0,0.1); }
+        button:hover { opacity: 0.88; }
+        .conv-item:hover { background: var(--surface2) !important; }
+        .welcome-chip:hover { border-color: var(--accent-border) !important; background: var(--accent-bg) !important; color: var(--accent) !important; }
+        .chip:hover { border-color: var(--border2) !important; }
+        .quick-btn:hover { border-color: var(--accent-border) !important; background: var(--accent-bg) !important; color: var(--accent) !important; }
+      \`}</style>
     </div>
   )
 }
 
 const s: Record<string, React.CSSProperties> = {
-  root: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
+  root: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg)' },
 
   // Modal
-  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, backdropFilter: 'blur(4px)' },
-  modalCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 400, maxWidth: '92vw', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, backdropFilter: 'blur(4px)' },
+  modalCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 420, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' },
   fieldLabel: { display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 6 },
-  fieldInput: { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontFamily: 'DM Sans, sans-serif', fontSize: 14, outline: 'none' },
-  primaryBtn: { flex: 1, padding: 11, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' },
-  secondaryBtn: { padding: '11px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 13 },
+  fieldInput: { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, outline: 'none' },
+  primaryBtn: { flex: 1, padding: 11, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: '0 3px 10px rgba(234,108,0,0.2)' },
+  secondaryBtn: { padding: '11px 16px', background: 'none', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--text2)', cursor: 'pointer', fontSize: 13 },
 
   // Header
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: 12 },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 12 },
   headerRight: { display: 'flex', alignItems: 'center', gap: 10 },
   menuBtn: { background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '4px 8px', borderRadius: 6 },
-  logoBadge: { width: 32, height: 32, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 12, color: '#fff', flexShrink: 0 },
-  logoTitle: { fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1 },
-  logoSub: { fontSize: 11, color: 'var(--muted)' },
-  usageBadge: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 500, border: '1px solid', background: 'var(--surface2)' },
-  userChip: { display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '6px 12px', cursor: 'pointer' },
-  userAvatar: { width: 26, height: 26, borderRadius: 7, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 10, color: '#fff', flexShrink: 0 },
-  logoutBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontFamily: 'DM Sans, sans-serif' },
+  logoBadge: { width: 34, height: 34, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 13, color: '#fff', flexShrink: 0, boxShadow: '0 3px 10px rgba(234,108,0,0.25)' },
+  logoTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1, color: 'var(--text)' },
+  logoSub: { fontSize: 11, color: 'var(--muted)', marginTop: 2 },
+  usageBadge: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 20, fontSize: 11.5, fontWeight: 500, border: '1px solid var(--blue-border)', background: 'var(--blue-bg)', color: 'var(--blue)' },
+  userChip: { display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 10, padding: '5px 12px', cursor: 'pointer' },
+  userAvatar: { width: 26, height: 26, borderRadius: 7, background: 'linear-gradient(135deg, #ea6c00, #f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 10, color: '#fff', flexShrink: 0 },
+  logoutBtn: { background: 'none', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontFamily: 'Inter, sans-serif' },
 
   // Layout
   main: { display: 'flex', flex: 1, overflow: 'hidden' },
 
   // Sidebar
-  sidebar: { width: 260, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' },
-  sideSection: { padding: '16px 14px 12px', borderBottom: '1px solid var(--border)' },
-  sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 10 },
-  chip: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, marginBottom: 5 },
-  chipActive: { borderColor: 'var(--accent)', background: 'rgba(255,77,28,.08)', color: 'var(--accent2)' },
-  newChatBtn: { width: '100%', padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 12, cursor: 'pointer' },
-  convItem: { padding: '8px 10px', borderRadius: 7, cursor: 'pointer', marginBottom: 4, border: '1px solid transparent' },
-  convItemActive: { background: 'rgba(255,77,28,.08)', borderColor: 'var(--accent)' },
-  quickBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--muted)', fontFamily: 'DM Sans, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 5 },
+  sidebar: { width: 256, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' },
+  sideSection: { padding: '14px 13px 12px', borderBottom: '1px solid var(--border)' },
+  sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 9 },
+  chip: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, marginBottom: 4, color: 'var(--text2)' },
+  chipActive: { borderColor: 'var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)' },
+  newChatBtn: { margin: '11px 13px', padding: 10, background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 3px 10px rgba(234,108,0,0.2)' } as React.CSSProperties,
+  convItem: { padding: '8px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 3, border: '1px solid transparent' },
+  convItemActive: { background: 'var(--blue-bg)', borderColor: 'var(--blue-border)' },
+  quickBtn: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--text2)', fontFamily: 'Inter, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 4 },
 
   // Chat
-  chatArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  chatArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' },
   messages: { flex: 1, overflowY: 'auto', padding: '28px 36px', scrollBehavior: 'smooth' as const },
 
   // Welcome
   welcome: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' as const, padding: 40 },
-  welcomeIcon: { width: 64, height: 64, background: 'linear-gradient(135deg, var(--accent), #ff8c5a)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 22, boxShadow: '0 0 40px rgba(255,77,28,.2)' },
-  welcomeTitle: { fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 700, marginBottom: 10 },
-  welcomeDesc: { fontSize: 14, color: 'var(--muted)', lineHeight: 1.7, maxWidth: 480, marginBottom: 28 },
+  welcomeIcon: { width: 64, height: 64, background: 'linear-gradient(135deg, #ea6c00, #f97316)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 22, boxShadow: '0 8px 24px rgba(234,108,0,0.2)' },
+  welcomeTitle: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, marginBottom: 10, color: 'var(--text)' },
+  welcomeDesc: { fontSize: 14, color: 'var(--text2)', lineHeight: 1.7, maxWidth: 480, marginBottom: 28 },
   chipRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, justifyContent: 'center' as const, maxWidth: 560 },
-  welcomeChip: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 20, padding: '7px 16px', fontSize: 12, color: 'var(--muted)', cursor: 'pointer' },
+  welcomeChip: { background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 20, padding: '7px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
 
   // Messages
-  messageRow: { display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid rgba(255,255,255,.04)' },
-  avatar: { width: 32, height: 32, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'Syne, sans-serif', marginTop: 2 },
-  avatarAI: { background: 'linear-gradient(135deg, var(--accent), #ff8c5a)', color: '#fff' },
-  avatarUser: { background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--muted)' },
+  messageRow: { display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' },
+  avatar: { width: 32, height: 32, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: 2 },
+  avatarAI: { background: 'linear-gradient(135deg, #ea6c00, #f97316)', color: '#fff', boxShadow: '0 2px 8px rgba(234,108,0,0.2)' },
+  avatarUser: { background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', color: 'var(--blue)' },
   msgContent: { flex: 1, minWidth: 0 },
-  msgRole: { fontSize: 11, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 7 },
+  msgRole: { fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 6 },
   msgText: { fontSize: 14, lineHeight: 1.75, color: 'var(--text)' },
-  fileChip: { display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', fontSize: 12, color: 'var(--muted)' },
+  fileChip: { display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', fontSize: 12, color: 'var(--text2)' },
 
   // Input
-  inputArea: { padding: '14px 36px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 },
-  limitBanner: { background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)', marginBottom: 10, textAlign: 'center' as const },
+  inputArea: { padding: '14px 36px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, boxShadow: '0 -1px 3px rgba(0,0,0,0.04)' },
+  limitBanner: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)', marginBottom: 10, textAlign: 'center' as const },
   filePrev: { display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 9px', fontSize: 12, maxWidth: 200 },
-  inputWrapper: { display: 'flex', alignItems: 'flex-end', gap: 9, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: '11px 13px' },
-  attachBtn: { width: 34, height: 34, background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 },
-  textarea: { flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'DM Sans, sans-serif', fontSize: 14, lineHeight: 1.5, resize: 'none' as const, outline: 'none', minHeight: 22, maxHeight: 150 },
-  sendBtn: { width: 34, height: 34, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 },
+  inputWrapper: { display: 'flex', alignItems: 'flex-end', gap: 9, background: 'var(--surface2)', border: '1.5px solid var(--border2)', borderRadius: 12, padding: '10px 12px' },
+  attachBtn: { width: 34, height: 34, background: 'none', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 },
+  textarea: { flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, resize: 'none' as const, outline: 'none', minHeight: 22, maxHeight: 150 },
+  sendBtn: { width: 34, height: 34, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, boxShadow: '0 2px 8px rgba(234,108,0,0.25)' },
   inputHint: { fontSize: 11, color: 'var(--muted)', marginTop: 7, textAlign: 'center' as const },
 }
+
