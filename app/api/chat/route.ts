@@ -122,7 +122,7 @@ ${message}
 Responde en español, con enfoque estratégico, práctico y útil para AMPM CAM.
 `.trim()
 
-    const reply = await callGeminiRest(fullPrompt, 900)
+    const reply = await callGeminiRest(fullPrompt, 2200)
 
     // 9. Save messages to DB
     const fileRefs =

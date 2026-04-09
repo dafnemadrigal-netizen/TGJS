@@ -1,7 +1,7 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 const GEMINI_MODEL = 'gemini-2.5-flash'
 
-export async function callGeminiRest(prompt: string, maxTokens = 300): Promise<string> {
+export async function callGeminiRest(prompt: string, maxTokens = 1500): Promise<string> {
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 }
@@ -17,20 +17,18 @@ export async function callGeminiRest(prompt: string, maxTokens = 300): Promise<s
 
   const data = await res.json()
 
-  console.log('Gemini status:', res.status)
-  console.log('Gemini response:', JSON.stringify(data))
-
   if (!res.ok) {
     throw new Error(data?.error?.message || `Gemini HTTP ${res.status}`)
   }
 
+  const candidate = data?.candidates?.[0]
   const text =
-    data?.candidates?.[0]?.content?.parts
+    candidate?.content?.parts
       ?.map((p: { text?: string }) => p.text || '')
       .join('') || ''
 
   if (!text.trim()) {
-    throw new Error('Gemini returned empty content')
+    throw new Error(candidate?.finishReason || 'Gemini returned empty content')
   }
 
   return text
