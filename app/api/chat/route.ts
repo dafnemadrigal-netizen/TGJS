@@ -128,7 +128,23 @@ ${message}
 Responde en español, con enfoque estratégico, práctico y útil para AMPM CAM.
 `.trim()
 
-    const reply = await callGeminiRest(fullPrompt, 8000)
+    // Retry up to 3 times for high-demand errors
+    let reply = ''
+    let lastError = ''
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        reply = await callGeminiRest(fullPrompt, 8000)
+        break
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : 'Unknown error'
+        const isOverloaded = lastError.includes('high demand') || lastError.includes('overloaded') || lastError.includes('503') || lastError.includes('429')
+        if (isOverloaded && attempt < 3) {
+          await new Promise(res => setTimeout(res, attempt * 3000))
+          continue
+        }
+        throw err
+      }
+    }
 
     // 9. Save messages to DB
     const fileRefs =
