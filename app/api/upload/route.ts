@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
         wb.SheetNames.forEach(sheetName => {
           const ws = wb.Sheets[sheetName]
           const csv = XLSX.utils.sheet_to_csv(ws)
-          const rows = csv.split('\n').slice(0, 500).join('\n')
+          const rows = csv.split('\n').slice(0, 5000).join('\n')
           parts.push(`=== Hoja: ${sheetName} ===\n${rows}`)
         })
         extractedText = parts.join('\n\n')
