@@ -4,7 +4,194 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Conversation, Message } from '@/lib/supabase'
 
-// Simple markdown renderer - no external deps
+// ─── VISUALIZATION COMPONENTS ───────────────────────────────────────────────
+
+function ComparisonTable({ data }: { data: any }) {
+    return (
+        <div style={{ margin: '14px 0', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            {data.title && (
+                <div style={{ padding: '10px 14px', background: 'var(--blue-bg)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 700, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {data.title}
+                </div>
+            )}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                    <tr>
+                        {data.columns?.map((col: string, i: number) => (
+                            <th key={i} style={{ padding: '9px 14px', background: 'var(--surface3)', textAlign: 'left', fontWeight: 600, fontSize: 11, color: 'var(--text2)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                {col}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.rows?.map((row: string[], i: number) => (
+                        <tr key={i} style={{ background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)' }}>
+                            {row.map((cell: string, j: number) => (
+                                <td key={j} style={{ padding: '9px 14px', borderBottom: '1px solid var(--border)', color: j === 0 ? 'var(--text)' : 'var(--text2)', fontWeight: j === 0 ? 600 : 400 }}>
+                                    {cell}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    )
+}
+
+function Scorecard({ data }: { data: any }) {
+    const statusConfig: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
+        red: { color: '#dc2626', bg: 'rgba(220,38,38,0.08)', border: 'rgba(220,38,38,0.2)', emoji: '🔴' },
+        yellow: { color: '#d97706', bg: 'rgba(217,119,6,0.08)', border: 'rgba(217,119,6,0.2)', emoji: '🟡' },
+        green: { color: '#16a34a', bg: 'rgba(22,163,74,0.08)', border: 'rgba(22,163,74,0.2)', emoji: '🟢' },
+    }
+    return (
+        <div style={{ margin: '14px 0', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            {data.title && (
+                <div style={{ padding: '10px 14px', background: 'var(--accent-bg)', borderBottom: '1px solid var(--accent-border)', fontSize: 12, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {data.title}
+                </div>
+            )}
+            <div style={{ padding: '4px 0' }}>
+                {data.items?.map((item: any, i: number) => {
+                    const cfg = statusConfig[item.status] || statusConfig.yellow
+                    return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: i < data.items.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--surface)' }}>
+                            <span style={{ fontSize: 16, flexShrink: 0 }}>{cfg.emoji}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{item.label}</div>
+                                {item.note && <div style={{ fontSize: 12, color: 'var(--text2)' }}>{item.note}</div>}
+                            </div>
+                            <div style={{ padding: '3px 10px', borderRadius: 20, background: cfg.bg, border: `1px solid ${cfg.border}`, fontSize: 11, fontWeight: 600, color: cfg.color, flexShrink: 0 }}>
+                                {item.status === 'red' ? 'Crítico' : item.status === 'yellow' ? 'En riesgo' : 'Controlado'}
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+function BarChart({ data }: { data: any }) {
+    const max = Math.max(...(data.items?.map((i: any) => i.value) || [1]))
+    return (
+        <div style={{ margin: '14px 0', borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden' }}>
+            {data.title && (
+                <div style={{ padding: '10px 14px', background: 'var(--surface3)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {data.title}
+                </div>
+            )}
+            <div style={{ padding: '14px 14px 10px', background: 'var(--surface)' }}>
+                {data.items?.map((item: any, i: number) => {
+                    const pct = Math.max(4, (item.value / max) * 100)
+                    const isBenchmark = item.label.toLowerCase().includes('benchmark') || item.label.toLowerCase().includes('quiktrip') || item.label.toLowerCase().includes('mercadona')
+                    return (
+                        <div key={i} style={{ marginBottom: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: isBenchmark ? 600 : 400 }}>{item.label}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: isBenchmark ? 'var(--green)' : 'var(--text)' }}>{item.value}{item.unit || ''}</span>
+                            </div>
+                            <div style={{ height: 8, background: 'var(--surface3)', borderRadius: 4, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: pct + '%', background: isBenchmark ? 'var(--green)' : 'var(--accent)', borderRadius: 4, transition: 'width 0.6s ease' }} />
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+function Roadmap({ data }: { data: any }) {
+    const phaseColors = [
+        { bg: 'rgba(37,99,235,0.08)', border: 'rgba(37,99,235,0.2)', accent: 'var(--blue)', label: 'var(--blue)' },
+        { bg: 'rgba(234,108,0,0.08)', border: 'rgba(234,108,0,0.2)', accent: 'var(--accent)', label: 'var(--accent)' },
+        { bg: 'rgba(22,163,74,0.08)', border: 'rgba(22,163,74,0.2)', accent: 'var(--green)', label: 'var(--green)' },
+    ]
+    return (
+        <div style={{ margin: '14px 0' }}>
+            {data.title && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+                    {data.title}
+                </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {data.phases?.map((phase: any, i: number) => {
+                    const c = phaseColors[i % phaseColors.length]
+                    return (
+                        <div key={i} style={{ borderRadius: 10, border: `1px solid ${c.border}`, background: c.bg, overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${c.border}` }}>
+                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: c.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                                    {i + 1}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: c.label }}>{phase.phase}</div>
+                                    {phase.timeframe && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{phase.timeframe}</div>}
+                                </div>
+                            </div>
+                            <div style={{ padding: '10px 14px' }}>
+                                {phase.items?.map((item: string, j: number) => (
+                                    <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: j < phase.items.length - 1 ? 6 : 0 }}>
+                                        <div style={{ width: 5, height: 5, borderRadius: '50%', background: c.accent, marginTop: 6, flexShrink: 0 }} />
+                                        <span style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{item}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+// ─── SMART MARKDOWN RENDERER ────────────────────────────────────────────────
+
+function MessageContent({ text }: { text: string }) {
+    // Split by :::viz blocks
+    const parts: Array<{ type: 'text' | 'viz'; content: string }> = []
+    const vizRegex = /:::viz\n([\s\S]*?)\n:::/g
+    let lastIndex = 0
+    let match
+
+    while ((match = vizRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push({ type: 'text', content: text.slice(lastIndex, match.index) })
+        }
+        parts.push({ type: 'viz', content: match[1].trim() })
+        lastIndex = match.index + match[0].length
+    }
+    if (lastIndex < text.length) {
+        parts.push({ type: 'text', content: text.slice(lastIndex) })
+    }
+
+    return (
+        <div>
+            {parts.map((part, i) => {
+                if (part.type === 'text') {
+                    return part.content.trim() ? <SimpleMarkdown key={i} text={part.content} /> : null
+                }
+                try {
+                    const parsed = JSON.parse(part.content)
+                    switch (parsed.type) {
+                        case 'comparison_table': return <ComparisonTable key={i} data={parsed.data} />
+                        case 'scorecard': return <Scorecard key={i} data={parsed.data} />
+                        case 'bar_chart': return <BarChart key={i} data={parsed.data} />
+                        case 'roadmap': return <Roadmap key={i} data={parsed.data} />
+                        default: return <SimpleMarkdown key={i} text={part.content} />
+                    }
+                } catch {
+                    return <SimpleMarkdown key={i} text={part.content} />
+                }
+            })}
+        </div>
+    )
+}
+
+// ─── SIMPLE MARKDOWN ────────────────────────────────────────────────────────
+
 function SimpleMarkdown({ text }: { text: string }) {
     const html = text
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -32,6 +219,8 @@ function SimpleMarkdown({ text }: { text: string }) {
     )
 }
 
+// ─── TYPES ──────────────────────────────────────────────────────────────────
+
 type PendingFile = {
     name: string
     type: 'image' | 'text'
@@ -50,6 +239,8 @@ const QUICK_PROMPTS = [
     '¿Cómo mejorar la experiencia del cliente sin aumentar headcount?',
     'Problemas de cobertura en turnos nocturnos. ¿Qué hacer?',
 ]
+
+// ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
 
 export default function ChatApp({ user }: { user: User }) {
     const [profile, setProfile] = useState<Profile | null>(null)
@@ -132,23 +323,10 @@ export default function ChatApp({ user }: { user: User }) {
             alert('El nombre es obligatorio')
             return
         }
-
         const { data, error } = await (supabase.from('profiles') as any)
-            .update({
-                name: editName.trim(),
-                role: editRole.trim(),
-                country: editCountry
-            })
-            .eq('id', user.id)
-            .select()
-            .single()
-
-        if (error) {
-            console.error('Error saving profile:', error)
-            alert('No se pudo guardar el perfil: ' + error.message)
-            return
-        }
-
+            .update({ name: editName.trim(), role: editRole.trim(), country: editCountry })
+            .eq('id', user.id).select().single()
+        if (error) { alert('No se pudo guardar el perfil: ' + error.message); return }
         setProfile(data)
         setActiveCountry(data?.country || '')
         setShowProfile(false)
@@ -197,7 +375,6 @@ export default function ChatApp({ user }: { user: User }) {
         setPendingFiles([])
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-        // Optimistic UI
         const optimisticMsg: Message = {
             id: `temp-${Date.now()}`, conversation_id: activeConvId || '',
             user_id: user.id, role: 'user', content: displayText,
@@ -224,7 +401,6 @@ export default function ChatApp({ user }: { user: User }) {
             })
 
             const data = await res.json()
-
             if (data.error === 'LIMIT_REACHED') {
                 setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
                 alert(data.message); return
@@ -267,38 +443,19 @@ export default function ChatApp({ user }: { user: User }) {
             {showProfile && (
                 <div style={s.modalOverlay}>
                     <div style={s.modalCard}>
-                        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 20, marginBottom: 6 }}>
-                            Mi perfil
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>
-                            Esta información personaliza las respuestas del asesor.
-                        </div>
+                        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 20, marginBottom: 6 }}>Mi perfil</div>
+                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>Esta información personaliza las respuestas del asesor.</div>
                         <div style={{ marginBottom: 14 }}>
-                            <label style={s.fieldLabel}>Nombre completo</label>
-                            <input
-                                style={s.fieldInput}
-                                placeholder="Ej. Dafne Madrigal"
-                                value={editName}
-                                onChange={e => setEditName(e.target.value)}
-                                autoFocus
-                            />
+                            <label style={s.fieldLabel}>Nombre completo *</label>
+                            <input style={s.fieldInput} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Tu nombre" />
                         </div>
                         <div style={{ marginBottom: 14 }}>
                             <label style={s.fieldLabel}>Puesto</label>
-                            <input
-                                style={s.fieldInput}
-                                placeholder="Ej. Directora de Operaciones"
-                                value={editRole}
-                                onChange={e => setEditRole(e.target.value)}
-                            />
+                            <input style={s.fieldInput} value={editRole} onChange={e => setEditRole(e.target.value)} placeholder="Ej. Director de Operaciones" />
                         </div>
                         <div style={{ marginBottom: 24 }}>
                             <label style={s.fieldLabel}>País principal</label>
-                            <select
-                                style={s.fieldInput}
-                                value={editCountry}
-                                onChange={e => setEditCountry(e.target.value)}
-                            >
+                            <select style={s.fieldInput} value={editCountry} onChange={e => setEditCountry(e.target.value)}>
                                 <option value="">Selecciona un país</option>
                                 <option value="Nicaragua">Nicaragua</option>
                                 <option value="Panamá">Panamá</option>
@@ -307,8 +464,8 @@ export default function ChatApp({ user }: { user: User }) {
                             </select>
                         </div>
                         <div style={{ display: 'flex', gap: 10 }}>
-                            <button style={s.primaryBtn} onClick={saveProfile}>Guardar cambios</button>
-                            <button style={s.secondaryBtn} onClick={() => setShowProfile(false)}>Cancelar</button>
+                            <button style={s.primaryBtn} onClick={saveProfile}>Guardar</button>
+                            {profile?.name && <button style={s.secondaryBtn} onClick={() => setShowProfile(false)}>Cancelar</button>}
                         </div>
                     </div>
                 </div>
@@ -317,7 +474,7 @@ export default function ChatApp({ user }: { user: User }) {
             {/* ── HEADER ── */}
             <header style={s.header}>
                 <div style={s.headerLeft}>
-                    <button style={s.menuBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
+                    <button style={s.menuBtn} onClick={() => setSidebarOpen(o => !o)}>☰</button>
                     <div style={s.logoBadge}>AP</div>
                     <div>
                         <div style={s.logoTitle}>AMPM People Strategy</div>
@@ -325,62 +482,45 @@ export default function ChatApp({ user }: { user: User }) {
                     </div>
                 </div>
                 <div style={s.headerRight}>
-                    {/* Usage badge */}
-                    <div style={{ ...s.usageBadge, borderColor: usageColor + '44', color: usageColor }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: usageColor }} />
-                        <span>{usage.count} / {usage.limit} este mes</span>
+                    <div style={{ ...s.usageBadge, color: usageColor, borderColor: usageColor }}>
+                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: usageColor }} />
+                        {usage.count} / {usage.limit}
                     </div>
-                    {/* Profile chip */}
-                    <div style={s.userChip} onClick={openProfileModal} title="Editar perfil">
+                    <div style={s.userChip} onClick={openProfileModal}>
                         <div style={s.userAvatar}>{initials}</div>
-                        <div>
-                            <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.2 }}>
-                                {profile?.name ? `${profile.name.split(' ')[0]} · ${profile.country || 'Sin país'}` : 'Mi perfil'}
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>
-                                {profile?.role || 'editar perfil'}
-                            </div>
-                        </div>
+                        <span style={{ fontSize: 12, color: 'var(--text2)' }}>{profile?.name?.split(' ')[0] || 'Perfil'}</span>
                     </div>
-                    {/* Logout button */}
-                    <button
-                        onClick={() => supabase.auth.signOut()}
-                        style={s.logoutBtn}
-                        title="Cerrar sesión"
-                    >
-                        ↩ Salir
-                    </button>
+                    <button style={s.logoutBtn} onClick={() => supabase.auth.signOut()}>Salir</button>
                 </div>
             </header>
 
+            {/* ── MAIN ── */}
             <div style={s.main}>
+
                 {/* ── SIDEBAR ── */}
                 {sidebarOpen && (
                     <aside style={s.sidebar}>
+                        <div style={s.sideSection}>
+                            <button style={s.newChatBtn} onClick={newConversation}>+ Nueva consulta</button>
+                        </div>
+
                         {/* Country filter */}
                         <div style={s.sideSection}>
-                            <div style={s.sideLabel}>País</div>
-                            {[['', '🌎', 'Todos'], ['Nicaragua', '🇳🇮', 'Nicaragua'], ['Panamá', '🇵🇦', 'Panamá'], ['El Salvador', '🇸🇻', 'El Salvador']].map(([val, flag, label]) => (
-                                <div key={val}
-                                    style={{ ...s.chip, ...(activeCountry === val ? s.chipActive : {}) }}
-                                    onClick={() => setActiveCountry(val)}>
-                                    <span>{flag}</span> {label}
+                            <div style={s.sideLabel}>País activo</div>
+                            {['', 'Nicaragua', 'Panamá', 'El Salvador'].map(c => (
+                                <div key={c} style={{ ...s.chip, ...(activeCountry === c ? s.chipActive : {}) }}
+                                    onClick={() => setActiveCountry(c)}>
+                                    <span style={{ fontSize: 14 }}>{c === '' ? '🌎' : c === 'Nicaragua' ? '🇳🇮' : c === 'Panamá' ? '🇵🇦' : '🇸🇻'}</span>
+                                    <span>{c || 'Todos los países'}</span>
                                 </div>
                             ))}
                         </div>
 
-                        {/* New conversation */}
-                        <div style={s.sideSection}>
-                            <button style={s.newChatBtn} onClick={newConversation}>✦ Nueva consulta</button>
-                        </div>
-
-                        {/* Conversation history */}
+                        {/* Conversations */}
                         <div style={{ ...s.sideSection, flex: 1, overflowY: 'auto' }}>
                             <div style={s.sideLabel}>Conversaciones recientes</div>
                             {conversations.length === 0 && (
-                                <div style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>
-                                    Sin conversaciones aún
-                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>Sin conversaciones aún</div>
                             )}
                             {conversations.map(conv => (
                                 <div key={conv.id}
@@ -396,20 +536,15 @@ export default function ChatApp({ user }: { user: User }) {
                             ))}
                         </div>
 
-                        {/* Quick prompts - collapsible */}
+                        {/* Quick prompts */}
                         <div style={s.sideSection}>
-                            <div
-                                style={{ ...s.sideLabel, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: quickPromptsOpen ? 10 : 0 }}
-                                onClick={() => setQuickPromptsOpen(o => !o)}
-                            >
+                            <div style={{ ...s.sideLabel, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: quickPromptsOpen ? 10 : 0 }}
+                                onClick={() => setQuickPromptsOpen(o => !o)}>
                                 <span>Preguntas rápidas</span>
                                 <span style={{ fontSize: 14, color: 'var(--muted)', transition: 'transform .2s', display: 'inline-block', transform: quickPromptsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
                             </div>
                             {quickPromptsOpen && QUICK_PROMPTS.map((p, i) => (
-                                <button key={i} style={s.quickBtn}
-                                    onClick={() => { setInput(p); textareaRef.current?.focus() }}>
-                                    {p}
-                                </button>
+                                <button key={i} style={s.quickBtn} onClick={() => { setInput(p); textareaRef.current?.focus() }}>{p}</button>
                             ))}
                         </div>
 
@@ -420,8 +555,7 @@ export default function ChatApp({ user }: { user: User }) {
                                 <div style={{ height: '100%', width: usagePct + '%', background: usageColor, borderRadius: 3, transition: 'width .4s' }} />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontSize: 11, color: 'var(--muted)' }}>
-                                <span>{usage.count} usadas</span>
-                                <span>límite: {usage.limit}</span>
+                                <span>{usage.count} usadas</span><span>límite: {usage.limit}</span>
                             </div>
                         </div>
                     </aside>
@@ -431,13 +565,11 @@ export default function ChatApp({ user }: { user: User }) {
                 <div style={s.chatArea}>
                     <div style={s.messages}>
 
-                        {/* Welcome screen */}
+                        {/* Welcome */}
                         {messages.length === 0 && (
                             <div style={s.welcome}>
                                 <div style={s.welcomeIcon}>⚡</div>
-                                <h2 style={s.welcomeTitle}>
-                                    {firstName ? `Hola, ${firstName} 👋` : '¿En qué puedo ayudarte hoy?'}
-                                </h2>
+                                <h2 style={s.welcomeTitle}>{firstName ? `Hola, ${firstName} 👋` : '¿En qué puedo ayudarte hoy?'}</h2>
                                 <p style={s.welcomeDesc}>
                                     Soy tu asesor estratégico de personas para AMPM CAM. Analizo problemas
                                     operativos usando Good Jobs Strategy, los libros de Zeynep Ton y los casos Harvard.
@@ -446,10 +578,7 @@ export default function ChatApp({ user }: { user: User }) {
                                 <div style={s.chipRow}>
                                     {['Alta rotación en tiendas', 'Cobertura de turnos', 'Roadmap Good Jobs',
                                         'Mala experiencia del cliente', 'Liderazgo en tienda', 'Sobrecarga operativa'].map(c => (
-                                            <div key={c} style={s.welcomeChip}
-                                                onClick={() => { setInput(c); textareaRef.current?.focus() }}>
-                                                {c}
-                                            </div>
+                                            <div key={c} style={s.welcomeChip} onClick={() => { setInput(c); textareaRef.current?.focus() }}>{c}</div>
                                         ))}
                                 </div>
                             </div>
@@ -462,24 +591,19 @@ export default function ChatApp({ user }: { user: User }) {
                                     {msg.role === 'assistant' ? 'AP' : initials}
                                 </div>
                                 <div style={s.msgContent}>
-                                    <div style={s.msgRole}>
-                                        {msg.role === 'assistant' ? 'AMPM People Strategy' : (profile?.name || 'Tú')}
-                                    </div>
-                                    {/* File attachments */}
+                                    <div style={s.msgRole}>{msg.role === 'assistant' ? 'AMPM People Strategy' : (profile?.name || 'Tú')}</div>
                                     {msg.file_refs && msg.file_refs.length > 0 && (
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
                                             {msg.file_refs.map((f, i) => (
                                                 <div key={i} style={s.fileChip}>
-                                                    {/\.(jpg|jpeg|png|gif|webp)$/i.test(f.name) ? '🖼️'
-                                                        : /\.pdf$/i.test(f.name) ? '📕'
-                                                            : /\.csv$/i.test(f.name) ? '📄' : '📊'} {f.name}
+                                                    {/\.(jpg|jpeg|png|gif|webp)$/i.test(f.name) ? '🖼️' : /\.pdf$/i.test(f.name) ? '📕' : /\.csv$/i.test(f.name) ? '📄' : '📊'} {f.name}
                                                 </div>
                                             ))}
                                         </div>
                                     )}
                                     <div style={s.msgText}>
                                         {msg.role === 'assistant'
-                                            ? <SimpleMarkdown text={msg.content} />
+                                            ? <MessageContent text={msg.content} />
                                             : <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
                                         }
                                     </div>
@@ -495,10 +619,7 @@ export default function ChatApp({ user }: { user: User }) {
                                     <div style={s.msgRole}>AMPM People Strategy</div>
                                     <div style={{ display: 'flex', gap: 5, padding: '10px 0', alignItems: 'center' }}>
                                         {[0, 1, 2].map(i => (
-                                            <div key={i} style={{
-                                                width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
-                                                animation: `bounce 1.2s ${i * 0.2}s infinite`
-                                            }} />
+                                            <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', animation: `bounce 1.2s ${i * 0.2}s infinite` }} />
                                         ))}
                                     </div>
                                 </div>
@@ -510,38 +631,25 @@ export default function ChatApp({ user }: { user: User }) {
                     {/* ── INPUT AREA ── */}
                     <div style={s.inputArea}>
                         {usage.count >= usage.limit && (
-                            <div style={s.limitBanner}>
-                                🚫 Has alcanzado el límite de {usage.limit} consultas este mes.
-                                Se restablecerá automáticamente el 1 del próximo mes.
-                            </div>
+                            <div style={s.limitBanner}>🚫 Has alcanzado el límite de {usage.limit} consultas este mes. Se restablecerá el 1 del próximo mes.</div>
                         )}
-
-                        {/* File previews */}
                         {pendingFiles.length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 8 }}>
                                 {pendingFiles.map((f, i) => (
                                     <div key={i} style={s.filePrev}>
                                         {f.previewUrl
                                             ? <img src={f.previewUrl} alt={f.name} style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 4 }} />
-                                            : <span style={{ fontSize: 16 }}>
-                                                {/\.pdf$/i.test(f.name) ? '📕' : /\.csv$/i.test(f.name) ? '📄' : '📊'}
-                                            </span>
+                                            : <span style={{ fontSize: 16 }}>{/\.pdf$/i.test(f.name) ? '📕' : /\.csv$/i.test(f.name) ? '📄' : '📊'}</span>
                                         }
-                                        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                                            {f.name}
-                                        </span>
+                                        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{f.name}</span>
                                         <button style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}
                                             onClick={() => setPendingFiles(prev => prev.filter((_, pi) => pi !== i))}>✕</button>
                                     </div>
                                 ))}
                             </div>
                         )}
-
                         <div style={s.inputWrapper}>
-                            <button style={s.attachBtn}
-                                onClick={() => fileInputRef.current?.click()}
-                                title="Adjuntar archivo"
-                                disabled={uploading}>
+                            <button style={s.attachBtn} onClick={() => fileInputRef.current?.click()} title="Adjuntar archivo" disabled={uploading}>
                                 {uploading ? '⏳' : '📎'}
                             </button>
                             <input ref={fileInputRef} type="file" style={{ display: 'none' }}
@@ -564,9 +672,7 @@ export default function ChatApp({ user }: { user: User }) {
                                 ↑
                             </button>
                         </div>
-                        <div style={s.inputHint}>
-                            Enter para enviar · Shift+Enter para nueva línea · 📎 para adjuntar imagen, Excel o PDF
-                        </div>
+                        <div style={s.inputHint}>Enter para enviar · Shift+Enter para nueva línea · 📎 para adjuntar imagen, Excel o PDF</div>
                     </div>
                 </div>
             </div>
@@ -581,16 +687,12 @@ export default function ChatApp({ user }: { user: User }) {
 
 const s: Record<string, React.CSSProperties> = {
     root: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
-
-    // Modal
     modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, backdropFilter: 'blur(4px)' },
     modalCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 400, maxWidth: '92vw', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' },
     fieldLabel: { display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 6 },
     fieldInput: { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontFamily: 'DM Sans, sans-serif', fontSize: 14, outline: 'none' },
     primaryBtn: { flex: 1, padding: 11, background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' },
     secondaryBtn: { padding: '11px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 13 },
-
-    // Header
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: 12 },
     headerLeft: { display: 'flex', alignItems: 'center', gap: 12 },
     headerRight: { display: 'flex', alignItems: 'center', gap: 10 },
@@ -602,11 +704,7 @@ const s: Record<string, React.CSSProperties> = {
     userChip: { display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '6px 12px', cursor: 'pointer' },
     userAvatar: { width: 26, height: 26, borderRadius: 7, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 10, color: '#fff', flexShrink: 0 },
     logoutBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontFamily: 'DM Sans, sans-serif' },
-
-    // Layout
     main: { display: 'flex', flex: 1, overflow: 'hidden' },
-
-    // Sidebar
     sidebar: { width: 260, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto' },
     sideSection: { padding: '16px 14px 12px', borderBottom: '1px solid var(--border)' },
     sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 10 },
@@ -616,20 +714,14 @@ const s: Record<string, React.CSSProperties> = {
     convItem: { padding: '8px 10px', borderRadius: 7, cursor: 'pointer', marginBottom: 4, border: '1px solid transparent' },
     convItemActive: { background: 'rgba(255,77,28,.08)', borderColor: 'var(--accent)' },
     quickBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--muted)', fontFamily: 'DM Sans, sans-serif', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' as const, lineHeight: 1.4, width: '100%', marginBottom: 5 },
-
-    // Chat
     chatArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
     messages: { flex: 1, overflowY: 'auto', padding: '28px 36px', scrollBehavior: 'smooth' as const },
-
-    // Welcome
     welcome: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' as const, padding: 40 },
     welcomeIcon: { width: 64, height: 64, background: 'linear-gradient(135deg, var(--accent), #ff8c5a)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 22, boxShadow: '0 0 40px rgba(255,77,28,.2)' },
     welcomeTitle: { fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 700, marginBottom: 10 },
     welcomeDesc: { fontSize: 14, color: 'var(--muted)', lineHeight: 1.7, maxWidth: 480, marginBottom: 28 },
     chipRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, justifyContent: 'center' as const, maxWidth: 560 },
     welcomeChip: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 20, padding: '7px 16px', fontSize: 12, color: 'var(--muted)', cursor: 'pointer' },
-
-    // Messages
     messageRow: { display: 'flex', gap: 14, padding: '18px 0', borderBottom: '1px solid rgba(255,255,255,.04)' },
     avatar: { width: 32, height: 32, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'Syne, sans-serif', marginTop: 2 },
     avatarAI: { background: 'linear-gradient(135deg, var(--accent), #ff8c5a)', color: '#fff' },
@@ -638,8 +730,6 @@ const s: Record<string, React.CSSProperties> = {
     msgRole: { fontSize: 11, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase' as const, color: 'var(--muted)', marginBottom: 7 },
     msgText: { fontSize: 14, lineHeight: 1.75, color: 'var(--text)' },
     fileChip: { display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', fontSize: 12, color: 'var(--muted)' },
-
-    // Input
     inputArea: { padding: '14px 36px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 },
     limitBanner: { background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)', marginBottom: 10, textAlign: 'center' as const },
     filePrev: { display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 9px', fontSize: 12, maxWidth: 200 },
