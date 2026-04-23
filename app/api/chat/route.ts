@@ -4,6 +4,33 @@ import { callGeminiRest } from '@/lib/gemini'
 import { buildSystemPrompt } from '@/lib/system-prompt'
 
 const MONTHLY_LIMIT = parseInt(process.env.MONTHLY_QUERY_LIMIT || '200')
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''
+
+async function callOpenAI(prompt: string, maxTokens = 4000): Promise<string> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: maxTokens,
+      temperature: 0.3,
+    }),
+  })
+
+  const data = await res.json()
+
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `OpenAI HTTP ${res.status}`)
+  }
+
+  const text = data?.choices?.[0]?.message?.content || ''
+  if (!text.trim()) throw new Error('OpenAI returned empty content')
+  return text
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,7 +79,6 @@ export async function POST(req: NextRequest) {
         .insert({ user_id: userId, title: 'Nueva consulta' })
         .select()
         .single()
-
       convId = newConv?.id
     }
 
@@ -91,13 +117,12 @@ export async function POST(req: NextRequest) {
       sharedKnowledge: (sharedKnowledge || []).map((k: any) => k.insight),
     })
 
-    // 8. Build prompt for Gemini REST
+    // 8. Build full prompt
     let fileContext = ''
-
     if (fileData && fileData.length > 0) {
       for (const file of fileData) {
         if (file.type === 'text' && file.content) {
-          const truncated = file.content && file.content.length > 8000 ? file.content.slice(0, 8000) + '\n...[truncado]' : file.content
+          const truncated = file.content.length > 8000 ? file.content.slice(0, 8000) + '\n...[truncado]' : file.content
           fileContext += `\n\n[Archivo adjunto: ${file.name}]\n${truncated}`
         } else if (file.type === 'image') {
           fileContext += `\n\n[Imagen adjunta: ${file.name}]`
@@ -128,40 +153,53 @@ ${message}
 Responde en español, con enfoque estratégico, práctico y útil para AMPM CAM.
 `.trim()
 
-    // Retry up to 3 times on overload — returns JSON on all failure paths
+    // 9. Try Gemini first, fallback to OpenAI
     let reply = ''
+    let modelUsed = 'gemini'
+
+    // Gemini: up to 3 attempts
     const delays = [0, 4000, 8000]
-    let lastErrMsg = ''
-    let succeeded = false
+    let geminiSucceeded = false
+
     for (let attempt = 0; attempt < 3; attempt++) {
       if (delays[attempt] > 0) {
         await new Promise(res => setTimeout(res, delays[attempt]))
       }
       try {
         reply = await callGeminiRest(fullPrompt, 8000)
-        succeeded = true
+        geminiSucceeded = true
         break
       } catch (err: unknown) {
-        lastErrMsg = err instanceof Error ? err.message : String(err)
-        const isOverloaded = lastErrMsg.includes('high demand') ||
-          lastErrMsg.includes('overloaded') ||
-          lastErrMsg.includes('503') ||
-          lastErrMsg.includes('429') ||
-          lastErrMsg.includes('UNAVAILABLE')
+        const msg = err instanceof Error ? err.message : String(err)
+        const isOverloaded =
+          msg.includes('high demand') ||
+          msg.includes('overloaded') ||
+          msg.includes('503') ||
+          msg.includes('429') ||
+          msg.includes('UNAVAILABLE') ||
+          msg.includes('not found') ||
+          msg.includes('not supported')
         if (!isOverloaded) break
       }
     }
-    if (!succeeded) {
-      return NextResponse.json({ error: lastErrMsg || 'Gemini no disponible. Intenta en unos segundos.' }, { status: 503 })
+
+    // Fallback to OpenAI if Gemini failed
+    if (!geminiSucceeded) {
+      try {
+        reply = await callOpenAI(fullPrompt, 4000)
+        modelUsed = 'openai'
+      } catch (openaiErr: unknown) {
+        const msg = openaiErr instanceof Error ? openaiErr.message : 'Ambos modelos no disponibles.'
+        return NextResponse.json({ error: msg }, { status: 503 })
+      }
     }
 
-    // 9. Save messages to DB
-    const fileRefs =
-      fileData?.map((f: any) => ({
-        name: f.name,
-        type: f.mimeType,
-        size: f.size || 0,
-      })) || []
+    // 10. Save messages to DB
+    const fileRefs = fileData?.map((f: any) => ({
+      name: f.name,
+      type: f.mimeType,
+      size: f.size || 0,
+    })) || []
 
     await (supabaseAdmin.from('messages') as any).insert([
       {
@@ -180,7 +218,7 @@ Responde en español, con enfoque estratégico, práctico y útil para AMPM CAM.
       },
     ])
 
-    // 10. Update conversation title or timestamp
+    // 11. Update conversation title or timestamp
     if (!history || history.length === 0) {
       const title = message.slice(0, 60) || 'Nueva consulta'
       await (supabaseAdmin.from('conversations') as any)
@@ -192,20 +230,21 @@ Responde en español, con enfoque estratégico, práctico y útil para AMPM CAM.
         .eq('id', convId)
     }
 
-    // 11. Log usage
+    // 12. Log usage
     await (supabaseAdmin.from('usage_log') as any).insert({
       user_id: userId,
       conversation_id: convId,
       tokens_used: Math.ceil((reply || '').length / 4),
     })
 
-    // 12. Update last_seen_at
+    // 13. Update last_seen_at
     await (supabaseAdmin.from('profiles') as any)
       .update({ last_seen_at: new Date().toISOString() })
       .eq('id', userId)
 
     return NextResponse.json({
       reply,
+      modelUsed,
       conversationId: convId,
       usageCount: (count || 0) + 1,
       usageLimit: MONTHLY_LIMIT,
